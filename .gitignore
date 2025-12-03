@@ -1,0 +1,23 @@
+# Build outputs
+out/
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.lib
+
+# Old work directory
+old_tutoring/
+
+# Compiled shaders
+*.spv
+
+# IDE files
+.vs/
+.vscode/
+*.vcxproj
+*.sln
+
+# OS files
+.DS_Store
+Thumbs.db
