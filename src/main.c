@@ -19,7 +19,7 @@ typedef struct _tAppData
     int       iWidth;
     int       iHeight;
 
-    // vulkan handles - t for typedef struct
+    // vulkan handles
     VkInstance       tInstance;
     VkSurfaceKHR     tSurface;
     VkPhysicalDevice tPhysicalDevice;
@@ -54,6 +54,8 @@ typedef struct _tAppData
 // -----------------------------------------------------------------------------
 // function declarations
 // -----------------------------------------------------------------------------
+
+// TODO: order these in a more logical way i.e. group tasks and handle creation etc...
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void             CreateInstance(tAppData* ptState);
 void             CreateSurface(tAppData* ptState);
@@ -78,7 +80,8 @@ VkShaderModule CreateShaderModule(tAppData* ptState, const char* pcFilename);
 // -----------------------------------------------------------------------------
 // main entry point
 // -----------------------------------------------------------------------------
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) 
+int WINAPI 
+WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) 
 {
     (void)hPrevInstance; (void)lpCmdLine; // unused
 
@@ -118,40 +121,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     tState.iHeight = 600;
 
     // 4. initialize vulkan
-    printf("creating vulkan instance...\n");
     CreateInstance(&tState);
-
-    printf("creating surface...\n");
     CreateSurface(&tState);
-
-    printf("picking physical device...\n");
     PickPhysicalDevice(&tState);
-
-    printf("creating logical device...\n");
     CreateLogicalDevice(&tState);
-
-    printf("creating swapchain...\n");
     CreateSwapchain(&tState);
-
-    printf("creating render pass...\n");
     CreateRenderPass(&tState);
-
-    printf("creating graphics pipeline...\n");
     CreateGraphicsPipeline(&tState);
-
-    printf("creating framebuffers...\n");
     CreateFramebuffers(&tState);
-
-    printf("creating command pool...\n");
     CreateCommandPool(&tState);
-
-    printf("creating command buffers...\n");
     CreateCommandBuffers(&tState);
-
-    printf("creating sync objects...\n");
     CreateSyncObjects(&tState);
 
-    printf("vulkan initialization complete!\n");
 
     // 5. main loop
     MSG msg = {0};
@@ -170,7 +151,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     // 6. cleanup
-    printf("cleaning up...\n");
     Cleanup(&tState);
 
     return (int)msg.wParam;
@@ -179,7 +159,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 // -----------------------------------------------------------------------------
 // window procedure
 // -----------------------------------------------------------------------------
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
+LRESULT CALLBACK 
+WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 {
     switch (uMsg) 
     {
@@ -207,7 +188,8 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 // vulkan initialization
 // -----------------------------------------------------------------------------
 
-void CreateInstance(tAppData* ptState) 
+void 
+CreateInstance(tAppData* ptState) 
 {
     VkApplicationInfo tAppInfo = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -233,7 +215,8 @@ void CreateInstance(tAppData* ptState)
     VK_CHECK(vkCreateInstance(&tCreateInfo, NULL, &ptState->tInstance));
 }
 
-void CreateSurface(tAppData* ptState) 
+void 
+CreateSurface(tAppData* ptState) 
 {
     VkWin32SurfaceCreateInfoKHR tCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
@@ -244,7 +227,8 @@ void CreateSurface(tAppData* ptState)
     VK_CHECK(vkCreateWin32SurfaceKHR(ptState->tInstance, &tCreateInfo, NULL, &ptState->tSurface));
 }
 
-void PickPhysicalDevice(tAppData* ptState) 
+void 
+PickPhysicalDevice(tAppData* ptState) 
 {
     uint32_t uDeviceCount = 0;
     vkEnumeratePhysicalDevices(ptState->tInstance, &uDeviceCount, NULL);
@@ -259,7 +243,8 @@ void PickPhysicalDevice(tAppData* ptState)
     free(pDevices);
 }
 
-void CreateLogicalDevice(tAppData* ptState) 
+void 
+CreateLogicalDevice(tAppData* ptState) 
 {
     // find queue family that supports graphics and presentation
     uint32_t uQueueFamilyCount = 0;
@@ -307,7 +292,8 @@ void CreateLogicalDevice(tAppData* ptState)
     vkGetDeviceQueue(ptState->tDevice, ptState->uGraphicsQueueFamily, 0, &ptState->tGraphicsQueue);
 }
 
-void CreateSwapchain(tAppData* ptState) 
+void 
+CreateSwapchain(tAppData* ptState) 
 {
     // get surface capabilities
     VkSurfaceCapabilitiesKHR tCapabilities;
@@ -357,19 +343,19 @@ void CreateSwapchain(tAppData* ptState)
 
     // create swapchain
     VkSwapchainCreateInfoKHR tCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .surface = ptState->tSurface,
-        .minImageCount = uImageCount,
-        .imageFormat = ptState->tSwapchainFormat,
-        .imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        .imageExtent = ptState->tSwapchainExtent,
+        .sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .surface          = ptState->tSurface,
+        .minImageCount    = uImageCount,
+        .imageFormat      = ptState->tSwapchainFormat,
+        .imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        .imageExtent      = ptState->tSwapchainExtent,
         .imageArrayLayers = 1,
-        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .preTransform = tCapabilities.currentTransform,
-        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-        .clipped = VK_TRUE
+        .preTransform     = tCapabilities.currentTransform,
+        .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode      = VK_PRESENT_MODE_FIFO_KHR,
+        .clipped          = VK_TRUE
     };
 
     VK_CHECK(vkCreateSwapchainKHR(ptState->tDevice, &tCreateInfo, NULL, &ptState->tSwapchain));
@@ -408,7 +394,8 @@ void CreateSwapchain(tAppData* ptState)
     free(pFormats);
 }
 
-void CreateRenderPass(tAppData* ptState) 
+void 
+CreateRenderPass(tAppData* ptState) 
 {
     VkAttachmentDescription tColorAttachment = {
         .format = ptState->tSwapchainFormat,
@@ -443,7 +430,8 @@ void CreateRenderPass(tAppData* ptState)
     VK_CHECK(vkCreateRenderPass(ptState->tDevice, &tRenderPassInfo, NULL, &ptState->tRenderPass));
 }
 
-void CreateGraphicsPipeline(tAppData* ptState) 
+void 
+CreateGraphicsPipeline(tAppData* ptState) 
 {
     printf("Loading shaders...\n");
 
@@ -578,7 +566,8 @@ void CreateGraphicsPipeline(tAppData* ptState)
     vkDestroyShaderModule(ptState->tDevice, tFragShaderModule, NULL);
 }
 
-void CreateFramebuffers(tAppData* ptState) 
+void 
+CreateFramebuffers(tAppData* ptState) 
 {
     ptState->ptFramebuffers = malloc(ptState->uSwapchainImageCount * sizeof(VkFramebuffer));
 
@@ -600,7 +589,8 @@ void CreateFramebuffers(tAppData* ptState)
     }
 }
 
-void CreateCommandPool(tAppData* ptState) 
+void 
+CreateCommandPool(tAppData* ptState) 
 {
     VkCommandPoolCreateInfo tPoolInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -611,7 +601,8 @@ void CreateCommandPool(tAppData* ptState)
     VK_CHECK(vkCreateCommandPool(ptState->tDevice, &tPoolInfo, NULL, &ptState->tCommandPool));
 }
 
-void CreateCommandBuffers(tAppData* ptState) 
+void 
+CreateCommandBuffers(tAppData* ptState) 
 {
     ptState->ptCommandBuffers = malloc(ptState->uSwapchainImageCount * sizeof(VkCommandBuffer));
 
@@ -656,7 +647,8 @@ void CreateCommandBuffers(tAppData* ptState)
     }
 }
 
-void CreateSyncObjects(tAppData* ptState) 
+void 
+CreateSyncObjects(tAppData* ptState) 
 {
     VkSemaphoreCreateInfo tSemaphoreInfo = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
@@ -672,7 +664,8 @@ void CreateSyncObjects(tAppData* ptState)
     VK_CHECK(vkCreateFence(ptState->tDevice, &tFenceInfo, NULL, &ptState->tInFlightFence));
 }
 
-void DrawFrame(tAppData* ptState) 
+void 
+DrawFrame(tAppData* ptState) 
 {
     // wait for previous frame to finish
     vkWaitForFences(ptState->tDevice, 1, &ptState->tInFlightFence, VK_TRUE, UINT64_MAX);
@@ -710,7 +703,8 @@ void DrawFrame(tAppData* ptState)
     vkQueuePresentKHR(ptState->tGraphicsQueue, &tPresentInfo);
 }
 
-void Cleanup(tAppData* ptState) 
+void 
+Cleanup(tAppData* ptState) 
 {
     vkDeviceWaitIdle(ptState->tDevice);
 
@@ -741,7 +735,8 @@ void Cleanup(tAppData* ptState)
     vkDestroyInstance(ptState->tInstance, NULL);
 }
 
-VkShaderModule CreateShaderModule(tAppData* ptState, const char* pcFilename) 
+VkShaderModule 
+CreateShaderModule(tAppData* ptState, const char* pcFilename) 
 {
     // Try multiple possible paths
     const char* apcPossiblePaths[] = {

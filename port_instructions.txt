@@ -1,0 +1,177 @@
+VULKAN PROJECT MIGRATION TODO LIST
+==================================
+
+PHASE 1: PROJECT STRUCTURE & SETUP
+----------------------------------
+
+1. Copy essential files:
+   - Copy shader files (simple.vert, simple.frag) to appropriate locations
+   - Copy any utility headers/functions you need
+   - Copy texture/image assets
+
+2. Update build scripts:
+   - Ensure Vulkan SDK paths are properly set
+   - Update shader compilation scripts if needed
+
+PHASE 2: WINDOW/APP INFRASTRUCTURE
+----------------------------------
+
+3. Port app state structure (add to tAppData):
+   - Vertex buffer handles
+   - Index buffer handles
+   - Texture image handles
+   - Descriptor handles (pool, layout, set)
+   - Staging buffer handles
+   - Additional synchronization objects
+
+4. Initialize missing Vulkan components:
+   - Enable validation layers
+   - Add debug callback setup
+   - Ensure proper queue family selection
+
+PHASE 3: RENDERER LOGIC PORTING
+--------------------------------
+
+5. Texture loading system:
+   - Port texture loading code with STB_image
+   - Add staging buffer creation/transfer
+   - Setup texture sampler
+   - Texture image view creation
+
+6. Buffer creation:
+   - Vertex buffer creation (ayVertexBuffer structure)
+   - Index buffer creation
+   - Staging buffers for data transfer
+   - Memory allocation and binding
+
+7. Descriptor system:
+   - Descriptor pool creation
+   - Descriptor set layout for textures
+   - Descriptor set allocation/binding
+   - Descriptor write/update
+
+8. Pipeline enhancement:
+   - Update pipeline with vertex format
+   - Add vertex input binding descriptions
+   - Add vertex attribute descriptions
+   - Update shader module loading
+
+PHASE 4: RENDERING LOGIC
+------------------------
+
+9. Command buffer recording:
+   - Texture transition commands
+   - Buffer copy commands
+   - Render pass commands
+   - Pipeline binding
+   - Descriptor set binding
+
+10. Draw calls:
+    - Indexed drawing (vkCmdDrawIndexed)
+    - Vertex buffer binding
+    - Index buffer binding
+
+11. Frame synchronization:
+    - Fence creation/waiting
+    - Semaphore synchronization
+    - Pipeline barriers for textures
+
+PHASE 5: SHADER MANAGEMENT
+--------------------------
+
+12. Shader compilation:
+    - Set up shader compilation pipeline
+    - Ensure proper include directories
+    - Test shader loading paths
+
+PHASE 6: RUNTIME FEATURES
+-------------------------
+
+13. Swapchain recreation:
+    - Add resize handling
+    - Recreate swapchain and dependent resources
+    - Handle minimization
+
+14. Memory management:
+    - Proper cleanup functions
+    - Resource destruction order
+    - Memory deallocation
+
+PHASE 7: DEBUGGING & VALIDATION
+-------------------------------
+
+15. Debug setup:
+    - Enable validation layers
+    - Add debug callback function
+    - Add error checking macros
+    - Memory validation
+
+PRIORITY ORDER (By Importance)
+==============================
+
+HIGH PRIORITY (Get it running):
+1.  Copy shaders to correct location
+2.  Update vertex buffer creation in new project
+3.  Update pipeline creation with proper vertex format
+4.  Basic triangle rendering without textures
+
+MEDIUM PRIORITY (Full functionality):
+5.  Texture loading system
+6.  Descriptor system for textures
+7.  Indexed drawing
+8.  Full rendering pipeline
+9.  Command buffer recording logic
+
+LOW PRIORITY (Polish):
+10. Resize handling
+11. Proper cleanup
+12. Validation layers
+13. Error checking
+14. Performance optimizations
+
+KEY DIFFERENCES TO ADDRESS:
+===========================
+1. Old project uses pl_graphics (abstraction layer), new is raw Vulkan
+2. Resource management differs - need to adapt allocation patterns
+3. Sync objects approach varies between projects
+4. Shader loading mechanism is different
+
+IMPLEMENTATION CHECKLIST:
+=========================
+□ 1. Update tAppData struct with all needed handles
+□ 2. Modify CreateGraphicsPipeline for vertex format
+□ 3. Add vertex/index buffer creation functions
+□ 4. Add texture loading function
+□ 5. Add descriptor setup function
+□ 6. Modify command buffer recording
+□ 7. Add cleanup functions
+□ 8. Test with simple triangle
+□ 9. Add textures
+□ 10. Add resize handling
+
+STEPS FOR EACH MIGRATION:
+=========================
+For each feature (buffers, textures, etc.):
+1. Copy code from old project
+2. Adapt to new project structure
+3. Integrate with existing initialization
+4. Test incrementally
+5. Fix any compilation errors
+6. Verify functionality
+
+STARTING POINT:
+===============
+Begin by:
+1. Copying vertex buffer structure (ayVertexBuffer)
+2. Modifying CreateGraphicsPipeline to use this structure
+3. Creating basic vertex/index buffers
+4. Getting a colored triangle to display
+5. Then add textures incrementally
+
+MIGRATION ORDER:
+================
+Day 1: Basic rendering
+Day 2: Textures
+Day 3: Full pipeline
+Day 4: Cleanup/resize
+Day 5: Debug/validation
