@@ -1,5 +1,7 @@
 # directories
 out/
 
-# Old work directory
-old_tutoring/
+
+# extensions 
+.pdb
+.exe
