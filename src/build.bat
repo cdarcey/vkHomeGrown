@@ -94,7 +94,7 @@
 @echo [1m[36mCompiling and Linking...[0m
 
 @rem compile from src folder, output to parent out folder
-cl main.c -Fe"%OUTPUT_DIR%/vkHomeGrown.exe" -Fo"%OUTPUT_DIR%/" -Od -Zi -nologo -I"%PROJECT_ROOT%/dependencies/stb" -I"%VULKAN_SDK%/Include" -MD -link -incremental:no /LIBPATH:"%VULKAN_SDK%/Lib" user32.lib gdi32.lib vulkan-1.lib
+cl main.c vkHomeGrown.c -Fe"%OUTPUT_DIR%/vkHomeGrown.exe" -Fo"%OUTPUT_DIR%/" -Od -Zi -nologo -I"%PROJECT_ROOT%/dependencies/stb" -I"%VULKAN_SDK%/Include" -MD -link -incremental:no /LIBPATH:"%VULKAN_SDK%/Lib" user32.lib gdi32.lib vulkan-1.lib
 
 @rem check build status
 @set PL_BUILD_STATUS=%ERRORLEVEL%

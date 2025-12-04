@@ -16,7 +16,7 @@ PHASE 1: PROJECT STRUCTURE & SETUP
 PHASE 2: WINDOW/APP INFRASTRUCTURE
 ----------------------------------
 
-3. Port app state structure (add to tAppData):
+3. Port app state structure (add to hgAppData):
    - Vertex buffer handles
    - Index buffer handles
    - Texture image handles
@@ -138,7 +138,7 @@ KEY DIFFERENCES TO ADDRESS:
 
 IMPLEMENTATION CHECKLIST:
 =========================
-□ 1. Update tAppData struct with all needed handles
+□ 1. Update hgAppData struct with all needed handles
 □ 2. Modify CreateGraphicsPipeline for vertex format
 □ 3. Add vertex/index buffer creation functions
 □ 4. Add texture loading function
