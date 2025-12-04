@@ -292,7 +292,7 @@ CreateLogicalDevice(tAppData* ptState)
     vkGetDeviceQueue(ptState->tDevice, ptState->uGraphicsQueueFamily, 0, &ptState->tGraphicsQueue);
 }
 
-void 
+void
 CreateSwapchain(tAppData* ptState) 
 {
     // get surface capabilities
@@ -357,7 +357,6 @@ CreateSwapchain(tAppData* ptState)
         .presentMode      = VK_PRESENT_MODE_FIFO_KHR,
         .clipped          = VK_TRUE
     };
-
     VK_CHECK(vkCreateSwapchainKHR(ptState->tDevice, &tCreateInfo, NULL, &ptState->tSwapchain));
 
     // get swapchain images
@@ -381,16 +380,15 @@ CreateSwapchain(tAppData* ptState)
                 .a = VK_COMPONENT_SWIZZLE_IDENTITY
             },
             .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
+                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
                 .baseArrayLayer = 0,
-                .layerCount = 1
+                .layerCount     = 1
             }
         };
         VK_CHECK(vkCreateImageView(ptState->tDevice, &tViewCreateInfo, NULL, &ptState->ptSwapchainImageViews[i]));
     }
-
     free(pFormats);
 }
 
@@ -398,33 +396,33 @@ void
 CreateRenderPass(tAppData* ptState) 
 {
     VkAttachmentDescription tColorAttachment = {
-        .format = ptState->tSwapchainFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .format         = ptState->tSwapchainFormat,
+        .samples        = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
     };
 
     VkAttachmentReference tColorAttachmentRef = {
         .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
     };
 
     VkSubpassDescription tSubpass = {
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount = 1,
-        .pColorAttachments = &tColorAttachmentRef
+        .pColorAttachments    = &tColorAttachmentRef
     };
 
     VkRenderPassCreateInfo tRenderPassInfo = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = 1,
-        .pAttachments = &tColorAttachment,
-        .subpassCount = 1,
-        .pSubpasses = &tSubpass
+        .pAttachments    = &tColorAttachment,
+        .subpassCount    = 1,
+        .pSubpasses      = &tSubpass
     };
 
     VK_CHECK(vkCreateRenderPass(ptState->tDevice, &tRenderPassInfo, NULL, &ptState->tRenderPass));
@@ -455,17 +453,17 @@ CreateGraphicsPipeline(tAppData* ptState)
     }
 
     VkPipelineShaderStageCreateInfo tVertShaderStageInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage  = VK_SHADER_STAGE_VERTEX_BIT,
         .module = tVertShaderModule,
-        .pName = "main"
+        .pName  = "main"
     };
 
     VkPipelineShaderStageCreateInfo tFragShaderStageInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage  = VK_SHADER_STAGE_FRAGMENT_BIT,
         .module = tFragShaderModule,
-        .pName = "main"
+        .pName  = "main"
     };
 
     VkPipelineShaderStageCreateInfo tShaderStages[] = {tVertShaderStageInfo, tFragShaderStageInfo};
@@ -477,16 +475,16 @@ CreateGraphicsPipeline(tAppData* ptState)
     };
 
     VkPipelineInputAssemblyStateCreateInfo tInputAssembly = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .primitiveRestartEnable = VK_FALSE
     };
 
     VkViewport tViewport = {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = (float)ptState->tSwapchainExtent.width,
-        .height = (float)ptState->tSwapchainExtent.height,
+        .x        = 0.0f,
+        .y        = 0.0f,
+        .width    = (float)ptState->tSwapchainExtent.width,
+        .height   = (float)ptState->tSwapchainExtent.height,
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
@@ -497,27 +495,27 @@ CreateGraphicsPipeline(tAppData* ptState)
     };
 
     VkPipelineViewportStateCreateInfo tViewportState = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
-        .pViewports = &tViewport,
-        .scissorCount = 1,
-        .pScissors = &tScissor
+        .pViewports    = &tViewport,
+        .scissorCount  = 1,
+        .pScissors     = &tScissor
     };
 
     VkPipelineRasterizationStateCreateInfo tRasterizer = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = VK_FALSE,
+        .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .depthClampEnable        = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
-        .polygonMode = VK_POLYGON_MODE_FILL,
-        .lineWidth = 1.0f,
-        .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .depthBiasEnable = VK_FALSE
+        .polygonMode             = VK_POLYGON_MODE_FILL,
+        .lineWidth               = 1.0f,
+        .cullMode                = VK_CULL_MODE_BACK_BIT,
+        .frontFace               = VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable         = VK_FALSE
     };
 
     VkPipelineMultisampleStateCreateInfo tMultisampling = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .sampleShadingEnable = VK_FALSE,
+        .sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .sampleShadingEnable  = VK_FALSE,
         .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
     };
 
@@ -528,12 +526,12 @@ CreateGraphicsPipeline(tAppData* ptState)
     };
 
     VkPipelineColorBlendStateCreateInfo tColorBlending = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .logicOpEnable = VK_FALSE,
-        .logicOp = VK_LOGIC_OP_COPY,
+        .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .logicOpEnable   = VK_FALSE,
+        .logicOp         = VK_LOGIC_OP_COPY,
         .attachmentCount = 1,
-        .pAttachments = &tColorBlendAttachment,
-        .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f}
+        .pAttachments    = &tColorBlendAttachment,
+        .blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f}
     };
 
     // Pipeline layout (empty for now)
@@ -545,18 +543,18 @@ CreateGraphicsPipeline(tAppData* ptState)
 
     // Create graphics pipeline
     VkGraphicsPipelineCreateInfo tPipelineInfo = {
-        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .stageCount = 2, // IMPORTANT: Set to 2 for vertex+fragment shaders
-        .pStages = tShaderStages,
-        .pVertexInputState = &tVertexInputInfo,
+        .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount          = 2, // IMPORTANT: Set to 2 for vertex+fragment shaders
+        .pStages             = tShaderStages,
+        .pVertexInputState   = &tVertexInputInfo,
         .pInputAssemblyState = &tInputAssembly,
-        .pViewportState = &tViewportState,
+        .pViewportState      = &tViewportState,
         .pRasterizationState = &tRasterizer,
-        .pMultisampleState = &tMultisampling,
-        .pColorBlendState = &tColorBlending,
-        .layout = ptState->tPipelineLayout,
-        .renderPass = ptState->tRenderPass,
-        .subpass = 0
+        .pMultisampleState   = &tMultisampling,
+        .pColorBlendState    = &tColorBlending,
+        .layout              = ptState->tPipelineLayout,
+        .renderPass          = ptState->tRenderPass,
+        .subpass             = 0
     };
 
     VK_CHECK(vkCreateGraphicsPipelines(ptState->tDevice, VK_NULL_HANDLE, 1, &tPipelineInfo, NULL, &ptState->tGraphicsPipeline));
@@ -576,13 +574,13 @@ CreateFramebuffers(tAppData* ptState)
         VkImageView attachments[] = {ptState->ptSwapchainImageViews[i]};
 
         VkFramebufferCreateInfo tFramebufferInfo = {
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass = ptState->tRenderPass,
+            .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass      = ptState->tRenderPass,
             .attachmentCount = 1,
-            .pAttachments = attachments,
-            .width = ptState->tSwapchainExtent.width,
-            .height = ptState->tSwapchainExtent.height,
-            .layers = 1
+            .pAttachments    = attachments,
+            .width           = ptState->tSwapchainExtent.width,
+            .height          = ptState->tSwapchainExtent.height,
+            .layers          = 1
         };
 
         VK_CHECK(vkCreateFramebuffer(ptState->tDevice, &tFramebufferInfo, NULL, &ptState->ptFramebuffers[i]));
@@ -593,8 +591,8 @@ void
 CreateCommandPool(tAppData* ptState) 
 {
     VkCommandPoolCreateInfo tPoolInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = ptState->uGraphicsQueueFamily
     };
 
@@ -607,9 +605,9 @@ CreateCommandBuffers(tAppData* ptState)
     ptState->ptCommandBuffers = malloc(ptState->uSwapchainImageCount * sizeof(VkCommandBuffer));
 
     VkCommandBufferAllocateInfo tAllocInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = ptState->tCommandPool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = ptState->tCommandPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = ptState->uSwapchainImageCount
     };
 
@@ -627,15 +625,15 @@ CreateCommandBuffers(tAppData* ptState)
         VkClearValue tClearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
 
         VkRenderPassBeginInfo tRenderPassInfo = {
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .renderPass = ptState->tRenderPass,
+            .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass  = ptState->tRenderPass,
             .framebuffer = ptState->ptFramebuffers[i],
-            .renderArea = {
-                .offset = {0, 0},
-                .extent = ptState->tSwapchainExtent
+            .renderArea  = {
+                .offset  = {0, 0},
+                .extent  = ptState->tSwapchainExtent
             },
             .clearValueCount = 1,
-            .pClearValues = &tClearColor
+            .pClearValues    = &tClearColor
         };
 
         vkCmdBeginRenderPass(ptState->ptCommandBuffers[i], &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -678,14 +676,14 @@ DrawFrame(tAppData* ptState)
 
     // submit command buffer
     VkSubmitInfo tSubmitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &ptState->tImageAvailableSemaphore,
-        .pWaitDstStageMask = (VkPipelineStageFlags[]){VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
-        .commandBufferCount = 1,
-        .pCommandBuffers = &ptState->ptCommandBuffers[uImageIndex],
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount   = 1,
+        .pWaitSemaphores      = &ptState->tImageAvailableSemaphore,
+        .pWaitDstStageMask    = (VkPipelineStageFlags[]){VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+        .commandBufferCount   = 1,
+        .pCommandBuffers      = &ptState->ptCommandBuffers[uImageIndex],
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &ptState->tRenderFinishedSemaphore
+        .pSignalSemaphores    = &ptState->tRenderFinishedSemaphore
     };
 
     VK_CHECK(vkQueueSubmit(ptState->tGraphicsQueue, 1, &tSubmitInfo, ptState->tInFlightFence));
