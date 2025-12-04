@@ -89,11 +89,11 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdS
     const char CLASS_NAME[] = "VulkanWindowClass";
 
     WNDCLASSEX wc = {
-        .cbSize = sizeof(WNDCLASSEX),
-        .style = CS_HREDRAW | CS_VREDRAW,
-        .lpfnWndProc = WindowProc,
-        .hInstance = hInstance,
-        .hCursor = LoadCursor(NULL, IDC_ARROW),
+        .cbSize        = sizeof(WNDCLASSEX),
+        .style         = CS_HREDRAW | CS_VREDRAW,
+        .lpfnWndProc   = WindowProc,
+        .hInstance     = hInstance,
+        .hCursor       = LoadCursor(NULL, IDC_ARROW),
         .hbrBackground = (HBRUSH)(COLOR_WINDOW + 1),
         .lpszClassName = CLASS_NAME
     };
@@ -114,11 +114,11 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdS
     UpdateWindow(hWnd);
 
     // 3. initialize app state
-    tAppData tState = {0};
+    tAppData tState  = {0};
     tState.hInstance = hInstance;
-    tState.hWnd = hWnd;
-    tState.iWidth = 800;
-    tState.iHeight = 600;
+    tState.hWnd      = hWnd;
+    tState.iWidth    = 800;
+    tState.iHeight   = 600;
 
     // 4. initialize vulkan
     CreateInstance(&tState);
@@ -192,12 +192,12 @@ void
 CreateInstance(tAppData* ptState) 
 {
     VkApplicationInfo tAppInfo = {
-        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "Vulkan App",
+        .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName   = "Vulkan App",
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-        .pEngineName = "No Engine",
-        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = VK_API_VERSION_1_0
+        .pEngineName        = "No Engine",
+        .engineVersion      = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion         = VK_API_VERSION_1_0
     };
 
     const char* extensions[] = {
@@ -206,9 +206,9 @@ CreateInstance(tAppData* ptState)
     };
 
     VkInstanceCreateInfo tCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pApplicationInfo = &tAppInfo,
-        .enabledExtensionCount = 2,
+        .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pApplicationInfo        = &tAppInfo,
+        .enabledExtensionCount   = 2,
         .ppEnabledExtensionNames = extensions
     };
 
@@ -219,9 +219,9 @@ void
 CreateSurface(tAppData* ptState) 
 {
     VkWin32SurfaceCreateInfoKHR tCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        .sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
         .hinstance = ptState->hInstance,
-        .hwnd = ptState->hWnd
+        .hwnd      = ptState->hWnd
     };
 
     VK_CHECK(vkCreateWin32SurfaceKHR(ptState->tInstance, &tCreateInfo, NULL, &ptState->tSurface));
@@ -273,18 +273,18 @@ CreateLogicalDevice(tAppData* ptState)
 
     float fQueuePriority = 1.0f;
     VkDeviceQueueCreateInfo tQueueCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .queueFamilyIndex = ptState->uGraphicsQueueFamily,
-        .queueCount = 1,
+        .queueCount       = 1,
         .pQueuePriorities = &fQueuePriority
     };
 
     const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     VkDeviceCreateInfo tDeviceCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &tQueueCreateInfo,
-        .enabledExtensionCount = 1,
+        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .queueCreateInfoCount    = 1,
+        .pQueueCreateInfos       = &tQueueCreateInfo,
+        .enabledExtensionCount   = 1,
         .ppEnabledExtensionNames = deviceExtensions
     };
 
@@ -369,10 +369,10 @@ CreateSwapchain(tAppData* ptState)
     for (uint32_t i = 0; i < ptState->uSwapchainImageCount; i++) 
     {
         VkImageViewCreateInfo tViewCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = ptState->ptSwapchainImages[i],
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = ptState->tSwapchainFormat,
+            .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image      = ptState->ptSwapchainImages[i],
+            .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+            .format     = ptState->tSwapchainFormat,
             .components = {
                 .r = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .g = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -690,12 +690,12 @@ DrawFrame(tAppData* ptState)
 
     // present
     VkPresentInfoKHR tPresentInfo = {
-        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &ptState->tRenderFinishedSemaphore,
-        .swapchainCount = 1,
-        .pSwapchains = &ptState->tSwapchain,
-        .pImageIndices = &uImageIndex
+        .pWaitSemaphores    = &ptState->tRenderFinishedSemaphore,
+        .swapchainCount     = 1,
+        .pSwapchains        = &ptState->tSwapchain,
+        .pImageIndices      = &uImageIndex
     };
 
     vkQueuePresentKHR(ptState->tGraphicsQueue, &tPresentInfo);
@@ -779,9 +779,9 @@ CreateShaderModule(tAppData* ptState, const char* pcFilename)
     fclose(pFile);
 
     VkShaderModuleCreateInfo tCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = lSize,
-        .pCode = puCode
+        .pCode    = puCode
     };
 
     VkShaderModule tShaderModule;
