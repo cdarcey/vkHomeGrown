@@ -1,3 +1,24 @@
+// =============================================================================
+// TABLE OF CONTENTS
+// =============================================================================
+/*
+    -> defines and macros
+    -> structs
+    ->function declarations
+        - Window & Platform Management
+        - Core Vulkan Context Initialization
+        - Swapchain Management
+        - Render Pipeline (RenderPass + Pipeline)
+        - Command Buffer Management
+        - Synchronization Objects
+        - Frame Rendering Loop
+        - Resource Creation & Management
+        - Shader Management
+        - Cleanup & Resource Destruction
+        - Helpers
+    -> shaders
+*/
+// =============================================================================
 
 
 #ifndef VKHOMEGROWN_H
@@ -112,9 +133,11 @@ typedef struct _hgVertex
 
 typedef struct _hgTexture
 {
-    unsigned char* pucData;
-    int            iHeight;
+    VkImage        tImage;
+    VkImageView    tImageView;
+    VkDeviceMemory tMemory;
     int            iWidth;
+    int            iHeight;
 } hgTexture;
 
 
@@ -192,6 +215,11 @@ typedef struct _hgDescriptorAllocConfig
     // void hg_create_descriptor_set_layout_from_config(hgAppData* ptState, const hgDescriptorLayoutConfig* ptConfig, VkDescriptorSetLayout* ptLayout);
     // void hg_allocate_descriptor_sets_from_config(hgAppData* ptState,const hgDescriptorAllocConfig* ptConfig, VkDescriptorSet* ptDescriptorSets);
 
+    // Textures
+    unsigned char* hg_load_texture_data(const char* pcFileName, int* iWidthOut, int* iHeightOut);
+    hgTexture      hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, int iHeight);
+    void           hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture);
+
 // -------------------------------
 // Shader Management
 // -------------------------------
@@ -204,6 +232,14 @@ typedef struct _hgDescriptorAllocConfig
     // void hg_cleanup_swapchain(hgAppData* ptState);  // For dynamic recreation
     // void hg_cleanup_pipeline(hgAppData* ptState);
     // void hg_cleanup_buffers(hgAppData* ptState);
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+    VkCommandBuffer hg_begin_single_time_commands(hgAppData* ptState);
+    void            hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer tCommandBuffer);
+    void            hg_transition_image_layout(VkCommandBuffer tCommandBuffer, VkImage tImage, VkImageLayout tOldLayout, VkImageLayout tNewLayout, VkImageSubresourceRange tSubresourceRange, VkPipelineStageFlags tSrcStageMask, VkPipelineStageFlags tDstStageMask);
+    void            hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pData, int iWidth, int iHeight);
 
 // -----------------------------------------------------------------------------
 // shaders

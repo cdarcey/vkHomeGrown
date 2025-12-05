@@ -1,4 +1,23 @@
-
+// =============================================================================
+// TABLE OF CONTENTS
+// =============================================================================
+/* Window & Platform Management
+    ->Core Vulkan Context Initialization
+    ->Swapchain Management
+    ->Render Pipeline (RenderPass + Pipeline)
+    ->Command Buffer Management
+    ->Synchronization Objects
+    ->Frame Rendering Loop
+    ->Resource Creation & Management
+        -Buffers & Memory
+        -Vertex/Index Buffer Creation
+        -Descriptor Management
+        -Textures
+    ->Shader Management
+    ->Cleanup & Resource Destruction
+    ->Helpers
+*/
+// =============================================================================
 
 #include "vkHomeGrown.h"
 #include <assert.h>
@@ -763,13 +782,173 @@ hg_create_quad_buffers(hgAppData* ptState)
     ptState->tResources.szIndexBufferSize = tIndexBufferSize;
 }
 
-// -------------------------------
+// -----------------------------------------------------------------------------
 // Descriptor Management
-// -------------------------------
+// -----------------------------------------------------------------------------
 void hg_create_descriptor_set(hgAppData* ptState)
 {
 
 };
+
+// -----------------------------------------------------------------------------
+// Textures
+// -----------------------------------------------------------------------------
+
+// CPU texture loading (uses STB)
+unsigned char*
+hg_load_texture_data(const char* pcFileName, int* iWidthOut, int* iHeightOut)
+{
+    int iComponentsInFile = 0;
+    return stbi_load(pcFileName, iWidthOut, iHeightOut, &iComponentsInFile, 4);
+}
+
+// GPU texture creation and upload
+hgTexture 
+hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, int iHeight)
+{
+    hgTexture tTexture = {0};
+    tTexture.iWidth    = iWidth;
+    tTexture.iHeight   = iHeight;
+
+    // create image
+    VkImageCreateInfo tImageInfo = {
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .format        = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent        = {iWidth, iHeight, 1},
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .tiling        = VK_IMAGE_TILING_OPTIMAL,
+        .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    VULKAN_CHECK(vkCreateImage(ptState->tContextComponents.tDevice, &tImageInfo, NULL, &tTexture.tImage));
+
+    // allocate memory
+    VkMemoryRequirements tMemRequirements;
+    vkGetImageMemoryRequirements(ptState->tContextComponents.tDevice, tTexture.tImage, &tMemRequirements);
+
+    VkMemoryAllocateInfo tAllocInfo = {
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = tMemRequirements.size,
+        .memoryTypeIndex = hg_find_memory_type(&ptState->tContextComponents, 
+                                              tMemRequirements.memoryTypeBits,
+                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
+    VULKAN_CHECK(vkAllocateMemory(ptState->tContextComponents.tDevice, &tAllocInfo, NULL, &tTexture.tMemory));
+    VULKAN_CHECK(vkBindImageMemory(ptState->tContextComponents.tDevice, tTexture.tImage, tTexture.tMemory, 0));
+
+    // upload texture data (using staging buffer)
+    hg_upload_to_image(ptState, tTexture.tImage, pucData, iWidth, iHeight);
+
+    // create image view
+    VkImageViewCreateInfo tViewInfo = {
+        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image      = tTexture.tImage,
+        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .format     = VK_FORMAT_R8G8B8A8_UNORM,
+        .components = {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY
+        },
+        .subresourceRange   = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+    VULKAN_CHECK(vkCreateImageView(ptState->tContextComponents.tDevice, &tViewInfo, NULL, &tTexture.tImageView));
+
+    return tTexture;
+}
+
+// Texture cleanup
+void 
+hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture)
+{
+    if(tTexture->tImageView != VK_NULL_HANDLE) vkDestroyImageView(ptState->tContextComponents.tDevice, tTexture->tImageView, NULL);
+    if(tTexture->tImage != VK_NULL_HANDLE)     vkDestroyImage(ptState->tContextComponents.tDevice, tTexture->tImage, NULL);
+    if(tTexture->tMemory != VK_NULL_HANDLE)    vkFreeMemory(ptState->tContextComponents.tDevice, tTexture->tMemory, NULL);
+
+    memset(tTexture, 0, sizeof(hgTexture));
+}
+
+// Internal upload helper
+void 
+hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pData, int iWidth, int iHeight)
+{
+    VkDeviceSize imageSize = iWidth * iHeight * 4; // RGBA8
+
+    // create staging buffer
+    VkBuffer       tStagingBuffer;
+    VkDeviceMemory tStagingBufferMemory;
+    hg_create_buffer(&ptState->tContextComponents, imageSize,
+                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                     &tStagingBuffer, &tStagingBufferMemory);
+
+    // copy data to staging buffer
+    void* pMapped;
+    vkMapMemory(ptState->tContextComponents.tDevice, tStagingBufferMemory, 0, imageSize, 0, &pMapped);
+    memcpy(pMapped, pData, imageSize);
+    vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingBufferMemory);
+
+    // record copy commands
+    VkCommandBuffer tCmdBuffer = hg_begin_single_time_commands(ptState);
+
+    // Transition to transfer dst
+    VkImageSubresourceRange tSubResRan = {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1
+    };
+
+    hg_transition_image_layout(tCmdBuffer, 
+                          tImage, 
+                          VK_IMAGE_LAYOUT_UNDEFINED, 
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          tSubResRan,
+                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                          VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    // copy buffer to image
+    VkBufferImageCopy tRegion = {
+        .bufferOffset       = 0,
+        .bufferRowLength    = 0,
+        .bufferImageHeight  = 0,
+        .imageSubresource   = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel       = 0,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        },
+        .imageOffset        = {0, 0, 0},
+        .imageExtent        = {iWidth, iHeight, 1}
+    };
+    vkCmdCopyBufferToImage(tCmdBuffer, tStagingBuffer, tImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &tRegion);
+
+    // transition to shader read
+    hg_transition_image_layout(tCmdBuffer, tImage, 
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              tSubResRan,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+    hg_end_single_time_commands(ptState, tCmdBuffer);
+
+    // cleanup staging
+    vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingBuffer, NULL);
+    vkFreeMemory(ptState->tContextComponents.tDevice, tStagingBufferMemory, NULL);
+}
 
 // -----------------------------------------------------------------------------
 // Shader Management
@@ -872,4 +1051,143 @@ hg_cleanup(hgAppData* ptState)
     if(ptState->tResources.tVertexBufferMemory != VK_NULL_HANDLE) vkFreeMemory(ptState->tContextComponents.tDevice, ptState->tResources.tVertexBufferMemory, NULL);
     if(ptState->tResources.tIndexBuffer != VK_NULL_HANDLE)        vkDestroyBuffer(ptState->tContextComponents.tDevice, ptState->tResources.tIndexBuffer, NULL);
     if(ptState->tResources.tIndexBufferMemory != VK_NULL_HANDLE)  vkFreeMemory(ptState->tContextComponents.tDevice, ptState->tResources.tIndexBufferMemory, NULL);
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+// Single-time command buffer helpers
+VkCommandBuffer 
+hg_begin_single_time_commands(hgAppData* ptState) 
+{
+    VkCommandBufferAllocateInfo tAllocInfo = {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandPool        = ptState->tCommandComponents.tCommandPool,
+        .commandBufferCount = 1
+    };
+    VkCommandBuffer tCommandBuffer;
+    VULKAN_CHECK(vkAllocateCommandBuffers(ptState->tContextComponents.tDevice, &tAllocInfo, &tCommandBuffer));
+
+    VkCommandBufferBeginInfo tBeginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    VULKAN_CHECK(vkBeginCommandBuffer(tCommandBuffer, &tBeginInfo));
+    return tCommandBuffer;
+}
+
+void 
+hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer tCommandBuffer) 
+{
+    VULKAN_CHECK(vkEndCommandBuffer(tCommandBuffer));
+
+    VkSubmitInfo tSubmitInfo = {
+        .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers    = &tCommandBuffer
+    };
+
+    // submit and wait for completion
+    VULKAN_CHECK(vkQueueSubmit(ptState->tContextComponents.tGraphicsQueue, 1, &tSubmitInfo, VK_NULL_HANDLE));
+    VULKAN_CHECK(vkQueueWaitIdle(ptState->tContextComponents.tGraphicsQueue));
+
+    // free the command buffer
+    vkFreeCommandBuffers(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, 1, &tCommandBuffer);
+}
+
+// Image layout transition helper
+void 
+hg_transition_image_layout(VkCommandBuffer tCommandBuffer, 
+                          VkImage tImage, 
+                          VkImageLayout tOldLayout, 
+                          VkImageLayout tNewLayout, 
+                          VkImageSubresourceRange tSubresourceRange, 
+                          VkPipelineStageFlags tSrcStageMask, 
+                          VkPipelineStageFlags tDstStageMask) 
+{
+    VkImageMemoryBarrier tBarrier = {
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .oldLayout           = tOldLayout,
+        .newLayout           = tNewLayout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = tImage,
+        .subresourceRange    = tSubresourceRange,
+    };
+
+    // source layouts (old)
+    switch (tOldLayout) 
+    {
+        case VK_IMAGE_LAYOUT_UNDEFINED:
+            tBarrier.srcAccessMask = 0;
+            break;
+
+        case VK_IMAGE_LAYOUT_PREINITIALIZED:
+            tBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            tBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            tBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            tBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            tBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            tBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            break;
+
+        default:
+            break;
+    }
+
+    // target layouts (new)
+    switch (tNewLayout) 
+    {
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            tBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            tBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            tBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            tBarrier.dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            if (tBarrier.srcAccessMask == 0) 
+            {
+                tBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+            }
+            tBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            break;
+
+        default:
+            break;
+    }
+
+    vkCmdPipelineBarrier(tCommandBuffer, 
+                        tSrcStageMask, 
+                        tDstStageMask, 
+                        0, 
+                        0, NULL,   // Memory barriers
+                        0, NULL,   // Buffer memory barriers
+                        1, &tBarrier); // Image memory barriers
 }
