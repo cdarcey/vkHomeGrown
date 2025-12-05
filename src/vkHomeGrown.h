@@ -5,7 +5,7 @@
 
 #include <windows.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_win32.h>
+#include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -98,8 +98,7 @@ typedef struct _hgRenderResources
 // application state
 typedef struct _hgAppData{
     // Windows stuff
-    HINSTANCE hInstance;
-    HWND hWnd;
+    GLFWwindow* pWindow;
     int width;
     int height;
 
@@ -152,7 +151,6 @@ typedef struct _hgDescriptorAllocConfig
 // -----------------------------------------------------------------------------
 
     // Window & Platform Management
-    LRESULT CALLBACK hg_window_procedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     // Core Vulkan Context Initialization
     void hg_create_instance(hgAppData* ptState);

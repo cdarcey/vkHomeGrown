@@ -5,35 +5,13 @@
 // -----------------------------------------------------------------------------
 // Window & Platform Management
 // -----------------------------------------------------------------------------
-LRESULT CALLBACK 
-hg_window_procedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
-{
-    switch (uMsg) 
-    {
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            return 0;
-        case WM_SIZE: 
-        {
-            // handle resize - in a real app, recreate swapchain here
-            return 0;
-        }
-        case WM_PAINT: 
-        {
-            PAINTSTRUCT ps;
-            BeginPaint(hWnd, &ps);
-            EndPaint(hWnd, &ps);
-            return 0;
-        }
-        default:
-            return DefWindowProc(hWnd, uMsg, wParam, lParam);
-    }
-}
+
+
 
 // -----------------------------------------------------------------------------
 // Core Vulkan Context Initialization
 // -----------------------------------------------------------------------------
-void 
+void
 hg_create_instance(hgAppData* ptState) 
 {
     VkApplicationInfo tAppInfo = {
@@ -45,31 +23,37 @@ hg_create_instance(hgAppData* ptState)
         .apiVersion         = VK_API_VERSION_1_0
     };
 
-    const char* extensions[] = {
-        VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_WIN32_SURFACE_EXTENSION_NAME
-    };
+    // get required extensions from GLFW
+    uint32_t glfwExtensionCount = 0;
+    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
     VkInstanceCreateInfo tCreateInfo = {
         .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo        = &tAppInfo,
-        .enabledExtensionCount   = 2,
-        .ppEnabledExtensionNames = extensions
+        .enabledExtensionCount   = glfwExtensionCount,  // Use GLFW's count
+        .ppEnabledExtensionNames = glfwExtensions       // Use GLFW's extensions
     };
+
+    // Optional: Add validation layers if needed
+    #ifdef _DEBUG
+    const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+    tCreateInfo.enabledLayerCount = 1;
+    tCreateInfo.ppEnabledLayerNames = validationLayers;
+    #endif
 
     VULKAN_CHECK(vkCreateInstance(&tCreateInfo, NULL, &ptState->tContextComponents.tInstance));
 }
 
-void 
+void
 hg_create_surface(hgAppData* ptState) 
 {
-    VkWin32SurfaceCreateInfoKHR tCreateInfo = {
-        .sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-        .hinstance = ptState->hInstance,
-        .hwnd      = ptState->hWnd
-    };
-
-    VULKAN_CHECK(vkCreateWin32SurfaceKHR(ptState->tContextComponents.tInstance, &tCreateInfo, NULL, &ptState->tSwapchainComponents.tSurface));
+    // GLFW handles platform-specific surface creation
+    VULKAN_CHECK(glfwCreateWindowSurface(
+        ptState->tContextComponents.tInstance,
+        ptState->pWindow,  // Add GLFWwindow* to your hgAppData struct
+        NULL,
+        &ptState->tSwapchainComponents.tSurface
+    ));
 }
 
 void 

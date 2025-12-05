@@ -1,10 +1,7 @@
-@rem keep environment variables modifications local
 @setlocal
 
-@rem set vulkan sdk path
 @set VULKAN_SDK=C:\VulkanSDK\1.4.309.0
 
-@rem verify the file exists
 @if not exist "%VULKAN_SDK%\Include\vulkan\vulkan.h" (
     @echo ERROR: vulkan.h not found at: %VULKAN_SDK%\Include\vulkan\vulkan.h
     @echo Please check the Vulkan SDK installation.
@@ -12,40 +9,37 @@
     @exit /b 1
 )
 
-@rem make script directory CWD (now in src folder)
 @pushd %~dp0
 
-@rem setup paths relative to src folder
 @set PROJECT_ROOT=..
 @set SHADER_DIR=%PROJECT_ROOT%/shaders
 @set OUTPUT_DIR=%PROJECT_ROOT%/out
+@set DEPENDENCIES_DIR=%PROJECT_ROOT%/dependencies
 
-@rem modify PATH to find vcvarsall.bat
+@if not exist "%DEPENDENCIES_DIR%\glfw3.lib" (
+    @echo ERROR: glfw3.lib not found at: %DEPENDENCIES_DIR%\glfw3.lib
+    @dir "%DEPENDENCIES_DIR%"
+    @pause
+    @exit /b 1
+)
+
 @set PATH=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build;%PATH%
 @set PATH=C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build;%PATH%
 @set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build;%PATH%
 @set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build;%PATH%
 @set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise/VC\Auxiliary\Build;%PATH%
 
-@rem setup environment for MSVC dev tools
 @call vcvarsall.bat amd64 > nul
 
-@rem default compilation result
 @set PL_RESULT=[1m[92mSuccessful.[0m
 
-@rem create output directories
 @if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 @if not exist "%OUTPUT_DIR%/shaders" mkdir "%OUTPUT_DIR%/shaders"
 
-@rem cleanup binaries if not hot reloading
 @if exist "%OUTPUT_DIR%/vkHomeGrown.exe" del "%OUTPUT_DIR%\vkHomeGrown.exe"
 
-@rem -----------------------------------------------------------------
-@rem COMPILE SHADERS
-@rem -----------------------------------------------------------------
 @echo [1m[36mCompiling shaders...[0m
 
-@rem compile vertex shader
 @if exist "%SHADER_DIR%/simple.vert" (
     @echo Compiling vertex shader...
     "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/simple.vert" -o "%OUTPUT_DIR%/shaders/vert.spv"
@@ -55,12 +49,10 @@
     )
 ) else (
     @echo [91mError: simple.vert not found at %SHADER_DIR%/simple.vert[0m
-    @echo Available shaders:
     @dir "%SHADER_DIR%"
     @goto ShaderError
 )
 
-@rem compile fragment shader
 @if exist "%SHADER_DIR%/simple.frag" (
     @echo Compiling fragment shader...
     "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/simple.frag" -o "%OUTPUT_DIR%/shaders/frag.spv"
@@ -70,7 +62,6 @@
     )
 ) else (
     @echo [91mError: simple.frag not found at %SHADER_DIR%/simple.frag[0m
-    @echo Available shaders:
     @dir "%SHADER_DIR%"
     @goto ShaderError
 )
@@ -84,38 +75,44 @@
 @goto Cleanupcpptest
 
 :AfterShaders
-@rem -----------------------------------------------------------------
-@rem END SHADER COMPILATION
-@rem -----------------------------------------------------------------
 
-@rem run compiler (and linker)
 @echo.
 @echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling and Linking...[0m
 
-@rem compile from src folder, output to parent out folder
-cl main.c vkHomeGrown.c -Fe"%OUTPUT_DIR%/vkHomeGrown.exe" -Fo"%OUTPUT_DIR%/" -Od -Zi -nologo -I"%PROJECT_ROOT%/dependencies/stb" -I"%VULKAN_SDK%/Include" -MD -link -incremental:no /LIBPATH:"%VULKAN_SDK%/Lib" user32.lib gdi32.lib vulkan-1.lib
+cl main.c vkHomeGrown.c -Fe"%OUTPUT_DIR%/vkHomeGrown.exe" -Fo"%OUTPUT_DIR%/" -Od -Zi -nologo ^
+-DGLFW_INCLUDE_VULKAN ^
+-I"%DEPENDENCIES_DIR%" ^
+-I"%PROJECT_ROOT%/dependencies/stb" ^
+-I"%VULKAN_SDK%/Include" ^
+-MD -link -incremental:no ^
+/LIBPATH:"%VULKAN_SDK%/Lib" ^
+"%DEPENDENCIES_DIR%\glfw3.lib" vulkan-1.lib user32.lib gdi32.lib shell32.lib
 
-@rem check build status
 @set PL_BUILD_STATUS=%ERRORLEVEL%
 
-@rem failed
 @if %PL_BUILD_STATUS% NEQ 0 (
     @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
     @set PL_RESULT=[1m[91mFailed.[0m
     goto Cleanupcpptest
 )
 
-@rem cleanup obj files
+@if exist "%DEPENDENCIES_DIR%\glfw3.dll" (
+    @echo Copying GLFW DLL to output folder...
+    copy "%DEPENDENCIES_DIR%\glfw3.dll" "%OUTPUT_DIR%\" > nul
+    @if %ERRORLEVEL% EQU 0 (
+        @echo [92mGLFW DLL copied successfully[0m
+    ) else (
+        @echo [91mWarning: Failed to copy GLFW DLL[0m
+    )
+)
+
 :Cleanupcpptest
     @echo [1m[36mCleaning...[0m
     @del "%OUTPUT_DIR%\*.obj"  > nul 2> nul
 
-
-@rem print results
 @echo.
 @echo [36mResult: [0m %PL_RESULT%
 @echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
 
-@rem return CWD to previous CWD
 @popd

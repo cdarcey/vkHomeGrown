@@ -1,50 +1,42 @@
 
 
-
 #include "vkHomeGrown.h"
 
 
-int WINAPI 
-WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) 
+int main(void) 
 {
-    (void)hPrevInstance; (void)lpCmdLine; // unused
+    // init GLFW
+    if (!glfwInit()) 
+    {
+        printf("Failed to initialize GLFW!\n");
+        return -1;
+    }
 
-    // 1. register window class
-    const char CLASS_NAME[] = "VulkanWindowClass";
+    // tell GLFW not to create OpenGL context
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    WNDCLASSEX wc = {
-        .cbSize        = sizeof(WNDCLASSEX),
-        .style         = CS_HREDRAW | CS_VREDRAW,
-        .lpfnWndProc   = hg_window_procedure,
-        .hInstance     = hInstance,
-        .hCursor       = LoadCursor(NULL, IDC_ARROW),
-        .hbrBackground = (HBRUSH)(COLOR_WINDOW + 1),
-        .lpszClassName = CLASS_NAME
-    };
+    // create window
+    GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan Application", NULL, NULL);
+    if (!window) 
+    {
+        printf("Failed to create GLFW window!\n");
+        glfwTerminate();
+        return -1;
+    }
 
-    RegisterClassEx(&wc);
+    // init app state
+    hgAppData tState = {0};
+    tState.pWindow = window;  // store GLFW window pointer
+    tState.width = 800;
+    tState.height = 600;
 
-    // 2. create window
-    HWND hWnd = CreateWindowEx(
-        0, CLASS_NAME, "Vulkan Application",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
-        NULL, NULL, hInstance, NULL
-    );
+    // get actual window size (framebuffer size for Vulkan)
+    int fbWidth, fbHeight;
+    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+    tState.width = fbWidth;
+    tState.height = fbHeight;
 
-    if(!hWnd) return 0;
-
-    ShowWindow(hWnd, nCmdShow);
-    UpdateWindow(hWnd);
-
-    // 3. initialize app state
-    hgAppData tState  = {0};
-    tState.hInstance = hInstance;
-    tState.hWnd      = hWnd;
-    tState.width     = 800;
-    tState.height    = 600;
-
-    // 4. initialize vulkan
+    // vkHomeGrown api init funcs
     hg_create_instance(&tState);
     hg_create_surface(&tState);
     hg_pick_physical_device(&tState);
@@ -59,25 +51,30 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdS
     hg_create_sync_objects(&tState);
 
 
-    // 5. main loop
-    MSG msg = {0};
-    while(msg.message != WM_QUIT) 
+    // main loop
+    while (!glfwWindowShouldClose(window)) 
     {
-        if(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) 
+        glfwPollEvents();  // handle window events
+
+        // check for window resize
+        int newWidth, newHeight;
+        glfwGetFramebufferSize(window, &newWidth, &newHeight);
+        if (newWidth != tState.width || newHeight != tState.height) 
         {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        } 
-        else 
-        {
-            // render frame
-            hg_draw_frame(&tState);
+            tState.width = newWidth;
+            tState.height = newHeight;
+            // TODO: Handle swapchain recreation for resize
         }
+
+        // render frame
+        hg_draw_frame(&tState);
     }
 
-    // 6. cleanup
+    // cleanup
+    vkDeviceWaitIdle(tState.tContextComponents.tDevice);  // wait before cleanup
     hg_cleanup(&tState);
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
-    return (int)msg.wParam;
+    return 0;
 }
-
