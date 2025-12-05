@@ -3,29 +3,21 @@
 #ifndef VKHOMEGROWN_H
 #define VKHOMEGROWN_H
 
-#include <windows.h>
+
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 
-// TODO: remove all "FMR" data -> for my reference meant to be removed when project is done
 
 #define VULKAN_CHECK(result) if((result) != VK_SUCCESS) { \
     printf("vulkan error at %s:%d: %d\n", __FILE__, __LINE__, (result)); \
     exit(1); \
 }
 
-/*
-    -- FMR --
-    lifetime explanations 
-    -> hgVulkanContext - created once, lives entire app lifetime
-    -> hgSwapchain - recreated on window resize
-    -> hgRenderPipeline - recreated when swapchain changes (format dependent)
-    -> hgFrameSync & hgCommandResources - created once, used every frame
-    -> hgRenderResources - created/destroyed as needed during gameplay
-*/
+
+// -----------------------------------------------------------------------------
+// structs 
+// -----------------------------------------------------------------------------
 
 // core vulkan device and queues 
 typedef struct _hgVulkanContext{
@@ -117,6 +109,13 @@ typedef struct _hgVertex
     float r, g, b, a; // color
     float u, v;       // texture coords
 } hgVertex;
+
+typedef struct _hgTexture
+{
+    unsigned char* pucData;
+    int            iHeight;
+    int            iWidth;
+} hgTexture;
 
 
 // TODO: do you really want to go down this road or just leave descriptors upto api user?
