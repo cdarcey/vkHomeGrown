@@ -47,6 +47,96 @@ int main(void)
     hg_create_framebuffers(&tState);
     hg_create_command_pool(&tState);
     hg_create_quad_buffers(&tState);
+
+    *tState.tResources.tDescriptorSets = malloc(sizeof(VkDescriptorSet));
+    tState.tResources.tDescriptorSets[0] = VK_NULL_HANDLE;
+
+
+    // desc pool
+    VkDescriptorPoolSize tDescPoolSize[] = {
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100},
+    };
+
+    const VkDescriptorPoolCreateInfo tDescPoolCreateInfo = {
+        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets       = 300,
+        .poolSizeCount = 1,
+        .pPoolSizes    = tDescPoolSize,
+    };
+    VULKAN_CHECK(vkCreateDescriptorPool(tState.tContextComponents.tDevice, &tDescPoolCreateInfo, NULL, &tState.tResources.tDescriptorPool));
+
+    // sets and layouts
+    VkDescriptorSetLayoutBinding tTextureAttachmentBinding = {
+        .binding         = 0,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT
+    };
+    VkDescriptorSetLayoutCreateInfo tDescriptorLayoutInfo = {
+        .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings    = &tTextureAttachmentBinding
+    };
+    VULKAN_CHECK(vkCreateDescriptorSetLayout(tState.tContextComponents.tDevice, &tDescriptorLayoutInfo, NULL, &tState.tResources.tDescriptorSetLayout));
+
+    // allocate
+    const VkDescriptorSetAllocateInfo tDescSetAllocInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = tState.tResources.tDescriptorPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &tState.tResources.tDescriptorSetLayout
+    };
+    VULKAN_CHECK(vkAllocateDescriptorSets(tState.tContextComponents.tDevice, &tDescSetAllocInfo, tState.tResources.tDescriptorSets));
+
+    int iTextureHeight = 0;
+    int iTextureWidth  = 0;
+    unsigned char* pcTextureData = hg_load_texture_data("../textures/cobble.png", &iTextureWidth, &iTextureHeight);
+
+    hgTexture tTestTexture = hg_create_texture(&tState, pcTextureData, iTextureWidth, iTextureHeight);
+
+    VkSamplerCreateInfo tSamplerInfo = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .unnormalizedCoordinates = VK_FALSE,
+        .compareEnable = VK_FALSE,
+        .compareOp = VK_COMPARE_OP_ALWAYS,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .mipLodBias = 0.0f,
+        .minLod = 0.0f,
+        .maxLod = 0.0f
+    };
+    VkSampler tTextureSampler;
+    vkCreateSampler(tState.tContextComponents.tDevice, &tSamplerInfo, NULL, &tTextureSampler);
+
+    // update descriptor set with texture
+    VkDescriptorImageInfo tImageInfo = {
+        .sampler = tTextureSampler,
+        .imageView = tTestTexture.tImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    VkWriteDescriptorSet tDescriptorWrite = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = *tState.tResources.tDescriptorSets,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &tImageInfo
+    };
+
+    vkUpdateDescriptorSets(tState.tContextComponents.tDevice, 1, &tDescriptorWrite, 0, NULL);
+    
+    
+
     hg_create_command_buffers(&tState);
     hg_create_sync_objects(&tState);
 

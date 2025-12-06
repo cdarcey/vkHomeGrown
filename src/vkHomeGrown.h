@@ -105,7 +105,7 @@ typedef struct _hgRenderResources
     // descriptor sets for textures/uniforms
     VkDescriptorPool      tDescriptorPool;
     VkDescriptorSetLayout tDescriptorSetLayout;
-    VkDescriptorSet*      tDescriptorSets;
+    VkDescriptorSet       tDescriptorSets[16]; // TODO: need to figure out how to handle this
 } hgRenderResources;
 
 // application state

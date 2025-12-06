@@ -76,7 +76,7 @@ hg_create_surface(hgAppData* ptState)
     // GLFW handles platform-specific surface creation
     VULKAN_CHECK(glfwCreateWindowSurface(
         ptState->tContextComponents.tInstance,
-        ptState->pWindow,  // Add GLFWwindow* to your hgAppData struct
+        ptState->pWindow,
         NULL,
         &ptState->tSwapchainComponents.tSurface
     ));
@@ -427,8 +427,35 @@ hg_create_graphics_pipeline(hgAppData* ptState)
     };
 
     // pipeline layout (empty for now)
+    // Create descriptor set layout binding (same as in main())
+    VkDescriptorSetLayoutBinding tTextureBinding = {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+    };
+    
+    VkDescriptorSetLayoutCreateInfo tDescriptorLayoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &tTextureBinding
+    };
+    
+    VkDescriptorSetLayout tDescriptorSetLayout;
+    VULKAN_CHECK(vkCreateDescriptorSetLayout(ptState->tContextComponents.tDevice, &tDescriptorLayoutInfo, NULL, &tDescriptorSetLayout));
+    
+    // Store it in resources so we can use it later
+    ptState->tResources.tDescriptorSetLayout = tDescriptorSetLayout;
+    
+    // Update pipeline layout to include descriptor set
+    VkDescriptorSetLayout setLayouts[] = {tDescriptorSetLayout};
+    
     VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = setLayouts,  // Include descriptor set layout!
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = NULL
     };
 
     VULKAN_CHECK(vkCreatePipelineLayout(ptState->tContextComponents.tDevice, &tPipelineLayoutInfo, NULL, &ptState->tPipelineComponents.tPipelineLayout));
@@ -532,6 +559,20 @@ hg_create_command_buffers(hgAppData* ptState)
 
         vkCmdBeginRenderPass(ptState->tCommandComponents.tCommandBuffers[i], &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(ptState->tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, ptState->tPipelineComponents.tPipeline);
+
+
+        if(ptState->tResources.tDescriptorSets != NULL && ptState->tResources.tDescriptorSets[0] != VK_NULL_HANDLE) {
+            vkCmdBindDescriptorSets(ptState->tCommandComponents.tCommandBuffers[i], 
+                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                   ptState->tPipelineComponents.tPipelineLayout,
+                                   0,  // firstSet
+                                   1,  // descriptorSetCount
+                                   &ptState->tResources.tDescriptorSets[0],  // pDescriptorSets
+                                   0,  // dynamicOffsetCount
+                                   NULL);  // pDynamicOffsets
+        }
+
+
 
         // bind vertex buffer
         VkBuffer vertexBuffers[] = {ptState->tResources.tVertexBuffer};
@@ -712,10 +753,10 @@ void
 hg_create_quad_buffers(hgAppData* ptState)
 {
     hgVertex atVertices[] = {
-        {-0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f},
-        { 0.5f, -0.5f,  0.0f, 1.0f, 0.0f, 1.0f,  1.0f, 0.0f},
-        { 0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f},
-        {-0.5f,  0.5f,  1.0f, 1.0f, 0.0f, 1.0f,  0.0f, 1.0f}
+        {-0.5f, -0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f},
+        { 0.5f, -0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f},
+        { 0.5f,  0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f},
+        {-0.5f,  0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f}
     };
 
     uint16_t atIndices[] = {0, 1, 2, 2, 3, 0};
@@ -1051,6 +1092,20 @@ hg_cleanup(hgAppData* ptState)
     if(ptState->tResources.tVertexBufferMemory != VK_NULL_HANDLE) vkFreeMemory(ptState->tContextComponents.tDevice, ptState->tResources.tVertexBufferMemory, NULL);
     if(ptState->tResources.tIndexBuffer != VK_NULL_HANDLE)        vkDestroyBuffer(ptState->tContextComponents.tDevice, ptState->tResources.tIndexBuffer, NULL);
     if(ptState->tResources.tIndexBufferMemory != VK_NULL_HANDLE)  vkFreeMemory(ptState->tContextComponents.tDevice, ptState->tResources.tIndexBufferMemory, NULL);
+
+
+    // TODO: temp for testing
+    if(ptState->tResources.tDescriptorPool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorPool, NULL);
+    }
+
+    if(ptState->tResources.tDescriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorSetLayout, NULL);
+    }
+
+    if(ptState->tResources.tDescriptorSets) {
+        free(ptState->tResources.tDescriptorSets);
+    }
 }
 
 // -----------------------------------------------------------------------------
