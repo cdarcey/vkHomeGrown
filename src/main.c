@@ -36,6 +36,14 @@ int main(void)
     tState.width = fbWidth;
     tState.height = fbHeight;
 
+    // fixed resources
+    hg_create_instance(&tState);
+    hg_create_surface(&tState);
+    hg_pick_physical_device(&tState);
+    hg_create_logical_device(&tState);
+
+
+    // testing code 
     hgVertex* atVertices = malloc(sizeof(hgVertex) * 16);  // 4 vertices per quad * 4 quads = 16 vertices
     uint16_t* atIndices = malloc(sizeof(uint16_t) * 24);   // 6 indices per quad * 4 quads = 24 indices
 
@@ -80,11 +88,7 @@ int main(void)
     atIndices[18] = 12; atIndices[19] = 13; atIndices[20] = 14;
     atIndices[21] = 14; atIndices[22] = 15; atIndices[23] = 12;
 
-    // vkHomeGrown api init funcs
-    hg_create_instance(&tState);
-    hg_create_surface(&tState);
-    hg_pick_physical_device(&tState);
-    hg_create_logical_device(&tState);
+    // vkHomeGrown api
     hg_create_swapchain(&tState);
     hg_create_render_pass(&tState);
     hg_create_graphics_pipeline(&tState);
