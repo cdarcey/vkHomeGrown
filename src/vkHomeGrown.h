@@ -97,10 +97,12 @@ typedef struct _hgRenderResources
     VkBuffer       tVertexBuffer;
     VkDeviceMemory tVertexBufferMemory;
     size_t         szVertexBufferSize;
+    uint32_t       uVertexCount;
 
     VkBuffer       tIndexBuffer;
     VkDeviceMemory tIndexBufferMemory;
     size_t         szIndexBufferSize;
+    uint32_t       uIndexCount;
 
     // descriptor sets for textures/uniforms
     VkDescriptorPool      tDescriptorPool;
@@ -207,7 +209,7 @@ typedef struct _hgDescriptorAllocConfig
     void     hg_create_buffer(hgVulkanContext* ptContextComponents, VkDeviceSize tSize, VkBufferUsageFlags tUsage, VkMemoryPropertyFlags tProperties, VkBuffer* pBuffer, VkDeviceMemory* pMemory);
     void     hg_copy_buffer(hgVulkanContext* ptContextComponents, hgCommandResources* ptCommandComponents, VkBuffer tSrcBuffer, VkBuffer tDstBuffer, VkDeviceSize tSize);
     // Vertex/Index Buffer Creation
-    void hg_create_quad_buffers(hgAppData* ptState);
+    void hg_create_vertex_buffer(hgAppData* ptState, hgVertex* tVertexBuffer, uint16_t* uIndexBuffer, uint32_t uVertexCount, uint32_t uIndexCount);
     // Descriptor Management
     void hg_create_descriptor_set(hgAppData* ptState); // TODO: do you really want to go down this road of descriptor managment or let api user manage them?
     // VkDescriptorSetLayoutBinding hg_create_binding(uint32_t uBinding, VkDescriptorType tType, VkShaderStageFlags tStageFlags, uint32_t uDescriptorCount);

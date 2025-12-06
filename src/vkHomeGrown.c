@@ -582,7 +582,7 @@ hg_create_command_buffers(hgAppData* ptState)
         // bind index buffer
         vkCmdBindIndexBuffer(ptState->tCommandComponents.tCommandBuffers[i], ptState->tResources.tIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-        vkCmdDrawIndexed(ptState->tCommandComponents.tCommandBuffers[i], 6, 1, 0, 0, 0); // draw quad
+        vkCmdDrawIndexed(ptState->tCommandComponents.tCommandBuffers[i], ptState->tResources.uIndexCount, 1, 0, 0, 0); // draw quad
         vkCmdEndRenderPass(ptState->tCommandComponents.tCommandBuffers[i]);
 
         VULKAN_CHECK(vkEndCommandBuffer(ptState->tCommandComponents.tCommandBuffers[i]));
@@ -749,78 +749,71 @@ void hg_copy_buffer(hgVulkanContext* ptContextComponents, hgCommandResources* pt
 // -------------------------------
 // Vertex/Index Buffer Creation
 // -------------------------------
-void 
-hg_create_quad_buffers(hgAppData* ptState)
+void
+hg_create_vertex_buffer(hgAppData* ptState, hgVertex* tVertexBuffer, uint16_t* uIndexBuffer, uint32_t uVertexCount, uint32_t uIndexCount)
 {
-    hgVertex atVertices[] = {
-        {-0.5f, -0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f},
-        { 0.5f, -0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f},
-        { 0.5f,  0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f},
-        {-0.5f,  0.5f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f}
-    };
+    ptState->tResources.szVertexBufferSize = sizeof(hgVertex) * uVertexCount;
+    ptState->tResources.szIndexBufferSize = sizeof(uint16_t) * uIndexCount;
 
-    uint16_t atIndices[] = {0, 1, 2, 2, 3, 0};
+    ptState->tResources.uVertexCount = uVertexCount;
+    ptState->tResources.uIndexCount = uIndexCount;
 
-    VkDeviceSize tVertexBufferSize = sizeof(atVertices);
-    VkDeviceSize tIndexBufferSize = sizeof(atIndices);
 
     // vertex buffer
     VkBuffer tStagingVertexBuffer;
     VkDeviceMemory tStagingVertexBufferMemory;
     hg_create_buffer(&ptState->tContextComponents, 
-        tVertexBufferSize, 
+        (VkDeviceSize)ptState->tResources.szVertexBufferSize, 
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
         &tStagingVertexBuffer, 
         &tStagingVertexBufferMemory);
 
     void* pVertexData;
-    vkMapMemory(ptState->tContextComponents.tDevice, tStagingVertexBufferMemory, 0, tVertexBufferSize, 0, &pVertexData);
-    memcpy(pVertexData, atVertices, tVertexBufferSize);
+    vkMapMemory(ptState->tContextComponents.tDevice, tStagingVertexBufferMemory, 0, (VkDeviceSize)ptState->tResources.szVertexBufferSize, 0, &pVertexData);
+    memcpy(pVertexData, tVertexBuffer, ptState->tResources.szVertexBufferSize);
     vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingVertexBufferMemory);
 
     hg_create_buffer(&ptState->tContextComponents, 
-        tVertexBufferSize,
+        (VkDeviceSize)ptState->tResources.szVertexBufferSize,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &ptState->tResources.tVertexBuffer, 
         &ptState->tResources.tVertexBufferMemory);
 
     hg_copy_buffer(&ptState->tContextComponents, &ptState->tCommandComponents, 
-        tStagingVertexBuffer, ptState->tResources.tVertexBuffer, tVertexBufferSize);
+        tStagingVertexBuffer, ptState->tResources.tVertexBuffer, (VkDeviceSize)ptState->tResources.szVertexBufferSize);
 
     vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingVertexBuffer, NULL);
     vkFreeMemory(ptState->tContextComponents.tDevice, tStagingVertexBufferMemory, NULL);
-    ptState->tResources.szVertexBufferSize = tVertexBufferSize;
 
     // index buffer
     VkBuffer tStagingIndexBuffer;
     VkDeviceMemory tStagingIndexBufferMemory;
     hg_create_buffer(&ptState->tContextComponents, 
-        tIndexBufferSize, 
+        (VkDeviceSize)ptState->tResources.szIndexBufferSize, 
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
         &tStagingIndexBuffer, 
         &tStagingIndexBufferMemory);
 
     void* pIndexData;
-    vkMapMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory, 0, tIndexBufferSize, 0, &pIndexData);
-    memcpy(pIndexData, atIndices, tIndexBufferSize);
+    vkMapMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory, 0, (VkDeviceSize)ptState->tResources.szIndexBufferSize, 0, &pIndexData);
+    memcpy(pIndexData, uIndexBuffer, ptState->tResources.szIndexBufferSize);
     vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory);
 
     hg_create_buffer(&ptState->tContextComponents, 
-        tIndexBufferSize, 
+        (VkDeviceSize)ptState->tResources.szIndexBufferSize, 
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &ptState->tResources.tIndexBuffer, 
         &ptState->tResources.tIndexBufferMemory);
 
     hg_copy_buffer(&ptState->tContextComponents, &ptState->tCommandComponents, 
-        tStagingIndexBuffer, ptState->tResources.tIndexBuffer, tIndexBufferSize);
+        tStagingIndexBuffer, ptState->tResources.tIndexBuffer, (VkDeviceSize)ptState->tResources.szIndexBufferSize);
 
     vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingIndexBuffer, NULL);
     vkFreeMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory, NULL);
-    ptState->tResources.szIndexBufferSize = tIndexBufferSize;
 }
 
 // -----------------------------------------------------------------------------

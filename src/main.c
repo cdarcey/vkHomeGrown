@@ -36,6 +36,50 @@ int main(void)
     tState.width = fbWidth;
     tState.height = fbHeight;
 
+    hgVertex* atVertices = malloc(sizeof(hgVertex) * 16);  // 4 vertices per quad * 4 quads = 16 vertices
+    uint16_t* atIndices = malloc(sizeof(uint16_t) * 24);   // 6 indices per quad * 4 quads = 24 indices
+
+    // Quad 0: Bottom-left quadrant
+    atVertices[0] = (hgVertex){-1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[1] = (hgVertex){ 0.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[2] = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[3] = (hgVertex){-1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+
+    // Quad 1: Bottom-right quadrant
+    atVertices[4] = (hgVertex){ 0.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[5] = (hgVertex){ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[6] = (hgVertex){ 1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[7] = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+
+    // Quad 2: Top-left quadrant
+    atVertices[8]  = (hgVertex){-1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[9]  = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[10] = (hgVertex){ 0.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[11] = (hgVertex){-1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+
+    // Quad 3: Top-right quadrant
+    atVertices[12] = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[13] = (hgVertex){ 1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[14] = (hgVertex){ 1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[15] = (hgVertex){ 0.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+
+    // Indices for all 4 quads (each quad uses 6 indices)
+    // Quad 0 indices
+    atIndices[0] = 0; atIndices[1] = 1; atIndices[2] = 2;
+    atIndices[3] = 2; atIndices[4] = 3; atIndices[5] = 0;
+
+    // Quad 1 indices
+    atIndices[6] = 4; atIndices[7] = 5; atIndices[8] = 6;
+    atIndices[9] = 6; atIndices[10] = 7; atIndices[11] = 4;
+
+    // Quad 2 indices
+    atIndices[12] = 8; atIndices[13] = 9; atIndices[14] = 10;
+    atIndices[15] = 10; atIndices[16] = 11; atIndices[17] = 8;
+
+    // Quad 3 indices
+    atIndices[18] = 12; atIndices[19] = 13; atIndices[20] = 14;
+    atIndices[21] = 14; atIndices[22] = 15; atIndices[23] = 12;
+
     // vkHomeGrown api init funcs
     hg_create_instance(&tState);
     hg_create_surface(&tState);
@@ -46,7 +90,7 @@ int main(void)
     hg_create_graphics_pipeline(&tState);
     hg_create_framebuffers(&tState);
     hg_create_command_pool(&tState);
-    hg_create_quad_buffers(&tState);
+    hg_create_vertex_buffer(&tState, atVertices, atIndices, 16, 24);
 
     *tState.tResources.tDescriptorSets = malloc(sizeof(VkDescriptorSet));
     tState.tResources.tDescriptorSets[0] = VK_NULL_HANDLE;
@@ -159,6 +203,9 @@ int main(void)
         // render frame
         hg_draw_frame(&tState);
     }
+
+    free(atVertices);
+    free(atIndices);
 
     // cleanup
     vkDeviceWaitIdle(tState.tContextComponents.tDevice);  // wait before cleanup
