@@ -540,7 +540,6 @@ hg_create_command_buffers(hgAppData* ptState)
         VkCommandBufferBeginInfo tBeginInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
         };
-
         VULKAN_CHECK(vkBeginCommandBuffer(ptState->tCommandComponents.tCommandBuffers[i], &tBeginInfo));
 
         VkClearValue tClearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
@@ -580,9 +579,16 @@ hg_create_command_buffers(hgAppData* ptState)
         vkCmdBindVertexBuffers(ptState->tCommandComponents.tCommandBuffers[i], 0, 1, vertexBuffers, offsets);
 
         // bind index buffer
-        vkCmdBindIndexBuffer(ptState->tCommandComponents.tCommandBuffers[i], ptState->tResources.tIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        if(ptState->tResources.tIndexBuffer == VK_NULL_HANDLE)
+        {
+            vkCmdDraw(ptState->tCommandComponents.tCommandBuffers[i], ptState->tResources.uVertexCount, 1, 0, 0);
+        }
+        else
+        {
+            vkCmdBindIndexBuffer(ptState->tCommandComponents.tCommandBuffers[i], ptState->tResources.tIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+            vkCmdDrawIndexed(ptState->tCommandComponents.tCommandBuffers[i], ptState->tResources.uIndexCount, 1, 0, 0, 0); // draw quad
+        }
 
-        vkCmdDrawIndexed(ptState->tCommandComponents.tCommandBuffers[i], ptState->tResources.uIndexCount, 1, 0, 0, 0); // draw quad
         vkCmdEndRenderPass(ptState->tCommandComponents.tCommandBuffers[i]);
 
         VULKAN_CHECK(vkEndCommandBuffer(ptState->tCommandComponents.tCommandBuffers[i]));
@@ -675,7 +681,6 @@ hg_find_memory_type(hgVulkanContext* ptContextComponents, uint32_t uTypeFilter, 
     exit(1);
 }
 
-
 void
 hg_create_buffer(hgVulkanContext* ptContextComponents, VkDeviceSize tSize, VkBufferUsageFlags tFlags, VkMemoryPropertyFlags tProperties, VkBuffer* ptBuffer, VkDeviceMemory* pMemory)
 {
@@ -749,15 +754,12 @@ void hg_copy_buffer(hgVulkanContext* ptContextComponents, hgCommandResources* pt
 // -------------------------------
 // Vertex/Index Buffer Creation
 // -------------------------------
+// should probably have a name like "bind buffers" since they are added to app data struct 
 void
 hg_create_vertex_buffer(hgAppData* ptState, hgVertex* tVertexBuffer, uint16_t* uIndexBuffer, uint32_t uVertexCount, uint32_t uIndexCount)
 {
     ptState->tResources.szVertexBufferSize = sizeof(hgVertex) * uVertexCount;
-    ptState->tResources.szIndexBufferSize = sizeof(uint16_t) * uIndexCount;
-
     ptState->tResources.uVertexCount = uVertexCount;
-    ptState->tResources.uIndexCount = uIndexCount;
-
 
     // vertex buffer
     VkBuffer tStagingVertexBuffer;
@@ -787,33 +789,41 @@ hg_create_vertex_buffer(hgAppData* ptState, hgVertex* tVertexBuffer, uint16_t* u
     vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingVertexBuffer, NULL);
     vkFreeMemory(ptState->tContextComponents.tDevice, tStagingVertexBufferMemory, NULL);
 
+
     // index buffer
-    VkBuffer tStagingIndexBuffer;
-    VkDeviceMemory tStagingIndexBufferMemory;
-    hg_create_buffer(&ptState->tContextComponents, 
-        (VkDeviceSize)ptState->tResources.szIndexBufferSize, 
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-        &tStagingIndexBuffer, 
-        &tStagingIndexBufferMemory);
+    if(uIndexBuffer == NULL) ptState->tResources.tIndexBuffer = VK_NULL_HANDLE;
+    if(uIndexBuffer != NULL)
+    {
+        ptState->tResources.szIndexBufferSize = sizeof(uint16_t) * uIndexCount;
+        ptState->tResources.uIndexCount = uIndexCount;
 
-    void* pIndexData;
-    vkMapMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory, 0, (VkDeviceSize)ptState->tResources.szIndexBufferSize, 0, &pIndexData);
-    memcpy(pIndexData, uIndexBuffer, ptState->tResources.szIndexBufferSize);
-    vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory);
+        VkBuffer tStagingIndexBuffer;
+        VkDeviceMemory tStagingIndexBufferMemory;
+        hg_create_buffer(&ptState->tContextComponents, 
+            (VkDeviceSize)ptState->tResources.szIndexBufferSize, 
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+            &tStagingIndexBuffer, 
+            &tStagingIndexBufferMemory);
 
-    hg_create_buffer(&ptState->tContextComponents, 
-        (VkDeviceSize)ptState->tResources.szIndexBufferSize, 
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &ptState->tResources.tIndexBuffer, 
-        &ptState->tResources.tIndexBufferMemory);
+        void* pIndexData;
+        vkMapMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory, 0, (VkDeviceSize)ptState->tResources.szIndexBufferSize, 0, &pIndexData);
+        memcpy(pIndexData, uIndexBuffer, ptState->tResources.szIndexBufferSize);
+        vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory);
 
-    hg_copy_buffer(&ptState->tContextComponents, &ptState->tCommandComponents, 
-        tStagingIndexBuffer, ptState->tResources.tIndexBuffer, (VkDeviceSize)ptState->tResources.szIndexBufferSize);
+        hg_create_buffer(&ptState->tContextComponents, 
+            (VkDeviceSize)ptState->tResources.szIndexBufferSize, 
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            &ptState->tResources.tIndexBuffer, 
+            &ptState->tResources.tIndexBufferMemory);
 
-    vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingIndexBuffer, NULL);
-    vkFreeMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory, NULL);
+        hg_copy_buffer(&ptState->tContextComponents, &ptState->tCommandComponents, 
+            tStagingIndexBuffer, ptState->tResources.tIndexBuffer, (VkDeviceSize)ptState->tResources.szIndexBufferSize);
+
+        vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingIndexBuffer, NULL);
+        vkFreeMemory(ptState->tContextComponents.tDevice, tStagingIndexBufferMemory, NULL);
+    }
 }
 
 // -----------------------------------------------------------------------------

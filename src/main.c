@@ -42,8 +42,22 @@ int main(void)
     hg_pick_physical_device(&tState);
     hg_create_logical_device(&tState);
 
+    // test buffer non indexed
+    hgVertex* atVertices2 = malloc(sizeof(hgVertex) * 6);
 
-    // testing code 
+    // First triangle (counter-clockwise)
+    atVertices2[0] = (hgVertex){-1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices2[1] = (hgVertex){ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices2[2] = (hgVertex){ 1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+
+    // Second triangle (counter-clockwise)
+    atVertices2[3] = (hgVertex){ 1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices2[4] = (hgVertex){-1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+    atVertices2[5] = (hgVertex){-1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+
+
+
+    // testing code indexed
     hgVertex* atVertices = malloc(sizeof(hgVertex) * 16);  // 4 vertices per quad * 4 quads = 16 vertices
     uint16_t* atIndices = malloc(sizeof(uint16_t) * 24);   // 6 indices per quad * 4 quads = 24 indices
 
@@ -94,7 +108,6 @@ int main(void)
     hg_create_graphics_pipeline(&tState);
     hg_create_framebuffers(&tState);
     hg_create_command_pool(&tState);
-    hg_create_vertex_buffer(&tState, atVertices, atIndices, 16, 24);
 
     *tState.tResources.tDescriptorSets = malloc(sizeof(VkDescriptorSet));
     tState.tResources.tDescriptorSets[0] = VK_NULL_HANDLE;
@@ -182,9 +195,10 @@ int main(void)
     };
 
     vkUpdateDescriptorSets(tState.tContextComponents.tDevice, 1, &tDescriptorWrite, 0, NULL);
-    
-    
 
+
+    hg_create_vertex_buffer(&tState, atVertices, atIndices, 16, 24);
+    // hg_create_vertex_buffer(&tState, atVertices2, NULL, 6, 0);
     hg_create_command_buffers(&tState);
     hg_create_sync_objects(&tState);
 
@@ -209,6 +223,7 @@ int main(void)
     }
 
     free(atVertices);
+    free(atVertices2);
     free(atIndices);
 
     // cleanup

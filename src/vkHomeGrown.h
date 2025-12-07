@@ -28,6 +28,7 @@
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 
 #define VULKAN_CHECK(result) if((result) != VK_SUCCESS) { \
