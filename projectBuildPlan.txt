@@ -1,0 +1,142 @@
+# Vulkan Renderer Function Requirements - Top-Down Analysis
+
+## Application Lifetime
+
+### hg_create_instance(hgAppData* ptState)
+- Currently fine as-is for basic usage
+- Future: hg_create_instance(hgAppData* ptState, const char* appName, uint32_t appVersion, bool enableValidation)
+- Reason: Different app names, optional validation layers for release builds
+
+### hg_create_surface(hgAppData* ptState)
+- Fine as-is (GLFW handles platform differences)
+
+### hg_pick_physical_device(hgAppData* ptState)
+- Currently just picks first GPU
+- Future: hg_pick_physical_device(hgAppData* ptState, hgDevicePreferences* prefs)
+- Where hgDevicePreferences might include: prefer discrete GPU, minimum memory requirements, required features
+- For now: probably fine as-is
+
+### hg_create_logical_device(hgAppData* ptState)
+- Currently fine for basic graphics
+- Future needs: enabling device features (samplerAnisotropy, geometryShader, etc.)
+- Future: hg_create_logical_device(hgAppData* ptState, VkPhysicalDeviceFeatures* enabledFeatures)
+
+### hg_create_command_pool(hgAppData* ptState)
+- Fine as-is
+
+### hg_create_render_pass(hgAppData* ptState)
+- Currently hardcoded: clear color to black, single color attachment
+- Future: hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* config)
+- Where config includes: clear color, depth attachment (yes/no), load/store ops, multisampling
+- For Monopoly: You'll want to specify clear color at minimum
+
+### hg_create_sync_objects(hgAppData* ptState)
+- Currently creates exactly 1 fence and 2 semaphores
+- **This is a problem! You need one set per frame in flight**
+- Change to: hg_create_sync_objects(hgAppData* ptState, uint32_t maxFramesInFlight)
+- Store arrays of fences/semaphores (typically maxFramesInFlight = 2 or 3)
+
+---
+
+## Swapchain Lifetime
+
+### hg_create_swapchain(hgAppData* ptState)
+- Currently picks FIFO present mode (vsync on)
+- Future: hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR preferredPresentMode)
+- Options: FIFO (vsync), MAILBOX (triple buffer), IMMEDIATE (no vsync)
+
+### hg_create_graphics_pipeline(hgAppData* ptState)
+- **This is your BIGGEST problem for flexibility**
+- Currently hardcoded: specific vertex format, specific shaders, specific blend mode, cull mode, etc.
+- You'll need MULTIPLE pipelines for different rendering needs
+- Redesign: hgPipeline hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* config)
+- Where hgPipelineConfig includes:
+  - Shader paths (vert/frag)
+  - Vertex input description (stride, attributes)
+  - Blend enable/disable
+  - Cull mode (back, front, none)
+  - Topology (triangle list, line list, etc.)
+  - Descriptor set layouts to use
+  - Push constant ranges
+- Return a pipeline handle, not store in ptState (you need many!)
+- For Monopoly: You might have 2-3 pipelines (textured sprites, solid color UI, debug lines)
+
+### hg_create_framebuffers(hgAppData* ptState)
+- Fine as-is (tied to swapchain images)
+
+---
+
+## Scene Lifetime
+
+### hg_create_vertex_buffer(hgAppData* ptState, hgVertex* vertices, uint16_t* indices, uint32_t vertexCount, uint32_t indexCount)
+- Major problem: stores in ptState, only allows ONE buffer
+- Redesign: hgBuffer hg_create_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride)
+- Redesign: hgBuffer hg_create_index_buffer(hgAppData* ptState, uint16_t* indices, uint32_t count)
+- Return buffer handles, don't store globally
+- User manages multiple buffers
+- For Monopoly: You might have 50+ buffers (one per sprite type, or one big buffer with offsets)
+
+### Texture system (currently inline in main)
+- Need proper functions:
+- hgTexture hg_create_texture(hgAppData* ptState, unsigned char* data, int width, int height) - already exists!
+- void hg_destroy_texture(hgAppData* ptState, hgTexture* texture) - already exists!
+- hgSampler hg_create_sampler(hgAppData* ptState, hgSamplerConfig* config) - **NEW**, extract from main
+- void hg_destroy_sampler(hgAppData* ptState, hgSampler sampler) - **NEW**
+
+### Descriptor system (currently inline in main)
+- Major redesign needed, currently too rigid
+- hgDescriptorPool hg_create_descriptor_pool(hgAppData* ptState, uint32_t maxSets, hgDescriptorPoolSize* sizes, uint32_t sizeCount)
+- hgDescriptorSet hg_allocate_descriptor_set(hgAppData* ptState, hgDescriptorPool pool, VkDescriptorSetLayout layout)
+- void hg_update_descriptor_set_texture(hgAppData* ptState, hgDescriptorSet set, uint32_t binding, hgTexture texture, hgSampler sampler)
+- Return handles, user manages multiple sets
+- For Monopoly: Each unique texture needs its own descriptor set
+
+---
+
+## Per-Frame / Draw Commands
+
+### hg_create_command_buffers(hgAppData* ptState)
+- Currently records commands at creation time (**INFLEXIBLE!**)
+- For a game, you need to re-record every frame with different data
+- Options:
+  1. Keep current approach, add hg_rerecord_command_buffers(hgAppData* ptState) - simplest
+  2. Change to manual recording: hg_begin_frame(), hg_draw_mesh(), hg_end_frame() - most flexible
+- For Monopoly: Option 1 is probably fine, re-record when scene changes
+
+### hg_draw_frame(hgAppData* ptState)
+- Currently submits pre-recorded commands
+- Fine as-is IF you're re-recording when needed
+- Future: Might need hg_draw_frame(hgAppData* ptState, hgScene* scene) if you pass render data
+
+---
+
+## Key Missing Functions You'll Need
+
+### Uniform buffers (don't exist yet!)
+- hgBuffer hg_create_uniform_buffer(hgAppData* ptState, size_t size)
+- void hg_update_uniform_buffer(hgAppData* ptState, hgBuffer buffer, void* data, size_t size)
+- For Monopoly: MVP matrix, per-sprite transforms
+
+### Dynamic rendering (don't exist yet!)
+- void hg_cmd_bind_pipeline(VkCommandBuffer cmd, hgPipeline pipeline)
+- void hg_cmd_bind_vertex_buffer(VkCommandBuffer cmd, hgBuffer buffer)
+- void hg_cmd_bind_index_buffer(VkCommandBuffer cmd, hgBuffer buffer)
+- void hg_cmd_bind_descriptor_set(VkCommandBuffer cmd, hgDescriptorSet set, VkPipelineLayout layout)
+- void hg_cmd_draw_indexed(VkCommandBuffer cmd, uint32_t indexCount, uint32_t firstIndex, int32_t vertexOffset)
+
+---
+
+## Priority Order for Monopoly
+
+1. **Fix sync objects** - frame-in-flight support (prevents crashes)
+2. **Multiple pipelines** - you'll need at least 2-3
+3. **Multiple textures/descriptor sets** - dozens of sprites
+4. **Multiple vertex buffers** - or one big buffer with offsets
+5. **Uniform buffers** - camera/projection matrices
+6. **Command buffer re-recording** - update scene each frame
+7. **Clear color configuration** - probably want green for Monopoly board
+
+---
+
+## Summary
+

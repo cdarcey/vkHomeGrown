@@ -426,34 +426,34 @@ hg_create_graphics_pipeline(hgAppData* ptState)
         .blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f}
     };
 
-    // pipeline layout (empty for now)
-    // Create descriptor set layout binding (same as in main())
+    // pipeline layout 
+    // reate descriptor set layout binding 
     VkDescriptorSetLayoutBinding tTextureBinding = {
         .binding = 0,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 1,
         .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
     };
-    
+
     VkDescriptorSetLayoutCreateInfo tDescriptorLayoutInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .bindingCount = 1,
         .pBindings = &tTextureBinding
     };
-    
+
     VkDescriptorSetLayout tDescriptorSetLayout;
     VULKAN_CHECK(vkCreateDescriptorSetLayout(ptState->tContextComponents.tDevice, &tDescriptorLayoutInfo, NULL, &tDescriptorSetLayout));
-    
-    // Store it in resources so we can use it later
+
+    // store it in resources so we can use it later
     ptState->tResources.tDescriptorSetLayout = tDescriptorSetLayout;
-    
-    // Update pipeline layout to include descriptor set
+
+    // update pipeline layout to include descriptor set
     VkDescriptorSetLayout setLayouts[] = {tDescriptorSetLayout};
-    
+
     VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
-        .pSetLayouts = setLayouts,  // Include descriptor set layout!
+        .pSetLayouts = setLayouts,  // include descriptor set layout
         .pushConstantRangeCount = 0,
         .pPushConstantRanges = NULL
     };
