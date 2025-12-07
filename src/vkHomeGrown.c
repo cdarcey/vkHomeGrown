@@ -38,15 +38,15 @@
 // Core Vulkan Context Initialization
 // -----------------------------------------------------------------------------
 void
-hg_create_instance(hgAppData* ptState) 
+hg_create_instance(hgAppData* ptState, const char* pcAppName, uint32_t uAppVersion, bool bEnableValidation)
 {
     VkApplicationInfo tAppInfo = {
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName   = "Vulkan App",
-        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-        .pEngineName        = "No Engine",
+        .pApplicationName   = pcAppName,
+        .applicationVersion = uAppVersion,
+        .pEngineName        = "HomeGrown Engine",
         .engineVersion      = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion         = VK_API_VERSION_1_0
+        .apiVersion         = VK_API_VERSION_1_0,
     };
 
     // get required extensions from GLFW
@@ -61,11 +61,12 @@ hg_create_instance(hgAppData* ptState)
     };
 
     // Optional: Add validation layers if needed
-    #ifdef _DEBUG
-    const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
-    tCreateInfo.enabledLayerCount = 1;
-    tCreateInfo.ppEnabledLayerNames = validationLayers;
-    #endif
+    if(bEnableValidation)
+    {
+        const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+        tCreateInfo.enabledLayerCount = 1;
+        tCreateInfo.ppEnabledLayerNames = validationLayers;
+    }
 
     VULKAN_CHECK(vkCreateInstance(&tCreateInfo, NULL, &ptState->tContextComponents.tInstance));
 }
@@ -151,7 +152,7 @@ hg_create_logical_device(hgAppData* ptState)
 // Swapchain Management
 // -----------------------------------------------------------------------------
 void
-hg_create_swapchain(hgAppData* ptState) 
+hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
 {
     // get surface capabilities
     VkSurfaceCapabilitiesKHR tCapabilities;
@@ -198,6 +199,26 @@ hg_create_swapchain(hgAppData* ptState)
         uImageCount = tCapabilities.maxImageCount;
     }
 
+    // see if requested mode is available
+    uint32_t uPresentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(ptState->tContextComponents.tPhysicalDevice, 
+        ptState->tSwapchainComponents.tSurface, &uPresentModeCount, NULL);
+
+    VkPresentModeKHR pPresentModes[8];  // 8 is more than enough
+    vkGetPhysicalDeviceSurfacePresentModesKHR(ptState->tContextComponents.tPhysicalDevice, 
+        ptState->tSwapchainComponents.tSurface, &uPresentModeCount, pPresentModes);
+
+    // FIFO as the default
+    VkPresentModeKHR tSelectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    for(uint32_t i = 0; i < uPresentModeCount; i++) 
+    {
+        if(pPresentModes[i] == tPreferredPresentMode) 
+        {
+            tSelectedPresentMode = tPreferredPresentMode;
+            break;
+        }
+    }
+
     // create swapchain
     VkSwapchainCreateInfoKHR tCreateInfo = {
         .sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -211,7 +232,7 @@ hg_create_swapchain(hgAppData* ptState)
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform     = tCapabilities.currentTransform,
         .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode      = VK_PRESENT_MODE_FIFO_KHR,
+        .presentMode      = tPreferredPresentMode,
         .clipped          = VK_TRUE
     };
     VULKAN_CHECK(vkCreateSwapchainKHR(ptState->tContextComponents.tDevice, &tCreateInfo, NULL, &ptState->tSwapchainComponents.tSwapchain));
@@ -253,13 +274,15 @@ hg_create_swapchain(hgAppData* ptState)
 // Render Pipeline (RenderPass + Pipeline)
 // -----------------------------------------------------------------------------
 void 
-hg_create_render_pass(hgAppData* ptState) 
+hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* tConfig)
 {
+    memcpy(ptState->afClearColor, &tConfig->afClearColor, sizeof(float) * 4);
+
     VkAttachmentDescription tColorAttachment = {
         .format         = ptState->tSwapchainComponents.tFormat,
         .samples        = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+        .loadOp         = tConfig->tLoadOp,
+        .storeOp        = tConfig->tStoreOp,
         .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -542,7 +565,12 @@ hg_create_command_buffers(hgAppData* ptState)
         };
         VULKAN_CHECK(vkBeginCommandBuffer(ptState->tCommandComponents.tCommandBuffers[i], &tBeginInfo));
 
-        VkClearValue tClearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+        VkClearValue tClearColor = {
+            ptState->afClearColor[0],
+            ptState->afClearColor[1],
+            ptState->afClearColor[2],
+            ptState->afClearColor[3]
+        };
 
         VkRenderPassBeginInfo tRenderPassInfo = {
             .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,

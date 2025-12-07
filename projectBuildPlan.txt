@@ -2,6 +2,7 @@
 
 ## Application Lifetime
 
+
 ### hg_create_instance(hgAppData* ptState)
 - Currently fine as-is for basic usage
 - Future: hg_create_instance(hgAppData* ptState, const char* appName, uint32_t appVersion, bool enableValidation)
@@ -14,7 +15,6 @@
 - Currently just picks first GPU
 - Future: hg_pick_physical_device(hgAppData* ptState, hgDevicePreferences* prefs)
 - Where hgDevicePreferences might include: prefer discrete GPU, minimum memory requirements, required features
-- For now: probably fine as-is
 
 ### hg_create_logical_device(hgAppData* ptState)
 - Currently fine for basic graphics
@@ -28,7 +28,6 @@
 - Currently hardcoded: clear color to black, single color attachment
 - Future: hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* config)
 - Where config includes: clear color, depth attachment (yes/no), load/store ops, multisampling
-- For Monopoly: You'll want to specify clear color at minimum
 
 ### hg_create_sync_objects(hgAppData* ptState)
 - Currently creates exactly 1 fence and 2 semaphores

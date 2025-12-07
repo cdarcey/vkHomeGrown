@@ -37,7 +37,7 @@ int main(void)
     tState.height = fbHeight;
 
     // fixed resources
-    hg_create_instance(&tState);
+    hg_create_instance(&tState, "test app", VK_MAKE_VERSION(1, 0, 0), true);
     hg_create_surface(&tState);
     hg_pick_physical_device(&tState);
     hg_create_logical_device(&tState);
@@ -102,9 +102,15 @@ int main(void)
     atIndices[18] = 12; atIndices[19] = 13; atIndices[20] = 14;
     atIndices[21] = 14; atIndices[22] = 15; atIndices[23] = 12;
 
+    hgRenderPassConfig tConfig = {
+        .tLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .tStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .afClearColor = {1.0f, 1.0f, 1.0f, 1.0f}
+    };
+
     // vkHomeGrown api
-    hg_create_swapchain(&tState);
-    hg_create_render_pass(&tState);
+    hg_create_swapchain(&tState, VK_PRESENT_MODE_MAILBOX_KHR);
+    hg_create_render_pass(&tState, &tConfig);
     hg_create_graphics_pipeline(&tState);
     hg_create_framebuffers(&tState);
     hg_create_command_pool(&tState);
@@ -143,10 +149,10 @@ int main(void)
 
     // allocate
     const VkDescriptorSetAllocateInfo tDescSetAllocInfo = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = tState.tResources.tDescriptorPool,
+        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool     = tState.tResources.tDescriptorPool,
         .descriptorSetCount = 1,
-        .pSetLayouts = &tState.tResources.tDescriptorSetLayout
+        .pSetLayouts        = &tState.tResources.tDescriptorSetLayout
     };
     VULKAN_CHECK(vkAllocateDescriptorSets(tState.tContextComponents.tDevice, &tDescSetAllocInfo, tState.tResources.tDescriptorSets));
 
@@ -157,22 +163,22 @@ int main(void)
     hgTexture tTestTexture = hg_create_texture(&tState, pcTextureData, iTextureWidth, iTextureHeight);
 
     VkSamplerCreateInfo tSamplerInfo = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .anisotropyEnable = VK_FALSE,
-        .maxAnisotropy = 1.0f,
-        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter               = VK_FILTER_LINEAR,
+        .minFilter               = VK_FILTER_LINEAR,
+        .addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable        = VK_FALSE,
+        .maxAnisotropy           = 1.0f,
+        .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
         .unnormalizedCoordinates = VK_FALSE,
-        .compareEnable = VK_FALSE,
-        .compareOp = VK_COMPARE_OP_ALWAYS,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .mipLodBias = 0.0f,
-        .minLod = 0.0f,
-        .maxLod = 0.0f
+        .compareEnable           = VK_FALSE,
+        .compareOp               = VK_COMPARE_OP_ALWAYS,
+        .mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .mipLodBias              = 0.0f,
+        .minLod                  = 0.0f,
+        .maxLod                  = 0.0f
     };
     VkSampler tTextureSampler;
     vkCreateSampler(tState.tContextComponents.tDevice, &tSamplerInfo, NULL, &tTextureSampler);
@@ -185,13 +191,13 @@ int main(void)
     };
 
     VkWriteDescriptorSet tDescriptorWrite = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = *tState.tResources.tDescriptorSets,
-        .dstBinding = 0,
+        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet          = *tState.tResources.tDescriptorSets,
+        .dstBinding      = 0,
         .dstArrayElement = 0,
         .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo = &tImageInfo
+        .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo      = &tImageInfo
     };
 
     vkUpdateDescriptorSets(tState.tContextComponents.tDevice, 1, &tDescriptorWrite, 0, NULL);

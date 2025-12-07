@@ -125,6 +125,7 @@ typedef struct _hgAppData{
     hgCommandResources tCommandComponents;
     hgFrameSync        tSyncComponents;
     hgRenderResources  tResources;
+    float              afClearColor[4];
 } hgAppData;
 
 typedef struct _hgVertex
@@ -165,6 +166,14 @@ typedef struct _hgDescriptorAllocConfig
     VkDescriptorSetLayout* pLayouts;    // Array of layouts (one per set)
 } hgDescriptorAllocConfig;
 
+typedef struct _hgRenderPassConfig
+{
+    bool                bDepthAttatchment; // for future use
+    VkAttachmentLoadOp  tLoadOp;
+    VkAttachmentStoreOp tStoreOp;
+    float               afClearColor[4];
+} hgRenderPassConfig;
+
 // -----------------------------------------------------------------------------
 // function declarations
 // -----------------------------------------------------------------------------
@@ -178,17 +187,17 @@ typedef struct _hgDescriptorAllocConfig
     // Window & Platform Management
 
     // Core Vulkan Context Initialization
-    void hg_create_instance(hgAppData* ptState);
+    void hg_create_instance(hgAppData* ptState, const char* pcAppName, uint32_t uAppVersion, bool bEnableValidation);
     void hg_create_surface(hgAppData* ptState);
     void hg_pick_physical_device(hgAppData* ptState);
     void hg_create_logical_device(hgAppData* ptState);
 
     // Swapchain Management
-    void hg_create_swapchain(hgAppData* ptState);
+    void hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR preferredPresentMode);
     // void hg_recreate_swapchain(hgAppData* ptState);  // For resize support
 
     // Render Pipeline (RenderPass + Pipeline)
-    void hg_create_render_pass(hgAppData* ptState);
+    void hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* tConfig);
     void hg_create_graphics_pipeline(hgAppData* ptState);
     void hg_create_framebuffers(hgAppData* ptState);
 
