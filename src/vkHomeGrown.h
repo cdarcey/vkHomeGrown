@@ -174,6 +174,43 @@ typedef struct _hgRenderPassConfig
     float               afClearColor[4];
 } hgRenderPassConfig;
 
+typedef struct _hgPipelineConfig
+{
+    // shader paths
+    const char* pcVertexShaderPath;
+    const char* pcFragmentShaderPath;
+
+    // vertex input description
+    uint32_t                           uVertexStride;
+    VkVertexInputAttributeDescription* ptAttributeDescriptions;
+    uint32_t                           uAttributeCount;
+
+    // blend mode
+    VkBool32 bBlendEnable;
+
+    // rasterization
+    VkCullModeFlags tCullMode;  // VK_CULL_MODE_BACK_BIT, VK_CULL_MODE_FRONT_BIT, VK_CULL_MODE_NONE
+    VkFrontFace     tFrontFace; // VK_FRONT_FACE_CLOCKWISE or VK_FRONT_FACE_COUNTER_CLOCKWISE
+
+    // topology
+    VkPrimitiveTopology tTopology; // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, etc.
+
+    // descriptor set layouts
+    VkDescriptorSetLayout* ptDescriptorSetLayouts;
+    uint32_t               uDescriptorSetLayoutCount;
+
+    // push constants -> for future addition
+    VkPushConstantRange* ptPushConstantRanges;
+    uint32_t             uPushConstantRangeCount;
+
+} hgPipelineConfig;
+
+typedef struct _hgPipeline
+{
+    VkPipeline       tPipeline;
+    VkPipelineLayout tPipelineLayout;
+} hgPipeline;
+
 // -----------------------------------------------------------------------------
 // function declarations
 // -----------------------------------------------------------------------------
@@ -197,13 +234,13 @@ typedef struct _hgRenderPassConfig
     // void hg_recreate_swapchain(hgAppData* ptState);  // For resize support
 
     // Render Pipeline (RenderPass + Pipeline)
-    void hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* tConfig);
-    void hg_create_graphics_pipeline(hgAppData* ptState);
-    void hg_create_framebuffers(hgAppData* ptState);
+    void       hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* tConfig);
+    hgPipeline hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* config);
+    void       hg_create_framebuffers(hgAppData* ptState);
 
     // Command Buffer Management
     void hg_create_command_pool(hgAppData* ptState);
-    void hg_create_command_buffers(hgAppData* ptState);
+    void hg_create_command_buffers(hgAppData* ptState, hgPipeline tPipeline);
     // void hg_recreate_command_buffers(hgAppData* ptState);  // For swapchain recreation
 
     // Synchronization Objects
@@ -244,6 +281,7 @@ typedef struct _hgRenderPassConfig
     // void hg_cleanup_swapchain(hgAppData* ptState);  // For dynamic recreation
     // void hg_cleanup_pipeline(hgAppData* ptState);
     // void hg_cleanup_buffers(hgAppData* ptState);
+    void hg_destroy_pipeline(hgAppData* ptState, hgPipeline* pipeline);
 
 // -----------------------------------------------------------------------------
 // Helpers

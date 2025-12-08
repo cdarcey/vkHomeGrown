@@ -232,7 +232,7 @@ hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform     = tCapabilities.currentTransform,
         .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode      = tPreferredPresentMode,
+        .presentMode      = tSelectedPresentMode,
         .clipped          = VK_TRUE
     };
     VULKAN_CHECK(vkCreateSwapchainKHR(ptState->tContextComponents.tDevice, &tCreateInfo, NULL, &ptState->tSwapchainComponents.tSwapchain));
@@ -311,29 +311,13 @@ hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* tConfig)
     VULKAN_CHECK(vkCreateRenderPass(ptState->tContextComponents.tDevice, &tRenderPassInfo, NULL, &ptState->tPipelineComponents.tRenderPass));
 }
 
-void 
-hg_create_graphics_pipeline(hgAppData* ptState) 
+
+hgPipeline
+hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* tConfig)
 {
-    printf("Loading shaders...\n");
-
-    // try different paths TODO: cleanup shader paths once a consistent system is picked 
-    VkShaderModule tVertShaderModule = hg_create_shader_module(ptState, "../out/shaders/vert.spv");
-    if(tVertShaderModule == VK_NULL_HANDLE) 
-    {
-        tVertShaderModule = hg_create_shader_module(ptState, "../../out/shaders/vert.spv");
-    }
-
-    VkShaderModule tFragShaderModule = hg_create_shader_module(ptState, "../out/shaders/frag.spv");
-    if(tFragShaderModule == VK_NULL_HANDLE) 
-    {
-        tFragShaderModule = hg_create_shader_module(ptState, "../../out/shaders/frag.spv");
-    }
-
-    if(tVertShaderModule == VK_NULL_HANDLE || tFragShaderModule == VK_NULL_HANDLE) 
-    {
-        printf("Failed to create shader modules!\n");
-        exit(1);
-    }
+    // create shader modules
+    VkShaderModule tVertShaderModule = hg_create_shader_module(ptState, tConfig->pcVertexShaderPath);
+    VkShaderModule tFragShaderModule = hg_create_shader_module(ptState, tConfig->pcFragmentShaderPath);
 
     VkPipelineShaderStageCreateInfo tVertShaderStageInfo = {
         .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -351,45 +335,24 @@ hg_create_graphics_pipeline(hgAppData* ptState)
 
     VkPipelineShaderStageCreateInfo tShaderStages[] = {tVertShaderStageInfo, tFragShaderStageInfo};
 
-
+    // vertex input state using config
     VkVertexInputBindingDescription tBindingDescription = {
-        .binding = 0,
-        .stride = sizeof(hgVertex),
+        .binding   = 0,
+        .stride    = tConfig->uVertexStride,
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-    };
-
-    VkVertexInputAttributeDescription atAttributeDescriptions[3] = {
-        { // position
-            .binding = 0,
-            .location = 0,
-            .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = offsetof(hgVertex, x)
-        },
-        { // color
-            .binding = 0,
-            .location = 1,
-            .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-            .offset = offsetof(hgVertex, r)
-        },
-        { // texcoord
-            .binding = 0,
-            .location = 2,
-            .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = offsetof(hgVertex, u)
-        }
     };
 
     VkPipelineVertexInputStateCreateInfo tVertexInputInfo = {
         .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount   = 1,
-        .pVertexBindingDescriptions      = &tBindingDescription,
-        .vertexAttributeDescriptionCount = 3,
-        .pVertexAttributeDescriptions    = atAttributeDescriptions
+        .vertexBindingDescriptionCount   = (tConfig->uVertexStride > 0) ? 1 : 0,
+        .pVertexBindingDescriptions      = (tConfig->uVertexStride > 0) ? &tBindingDescription : NULL,
+        .vertexAttributeDescriptionCount = tConfig->uAttributeCount,
+        .pVertexAttributeDescriptions    = tConfig->ptAttributeDescriptions
     };
 
     VkPipelineInputAssemblyStateCreateInfo tInputAssembly = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .topology               = tConfig->tTopology,
         .primitiveRestartEnable = VK_FALSE
     };
 
@@ -421,8 +384,8 @@ hg_create_graphics_pipeline(hgAppData* ptState)
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode             = VK_POLYGON_MODE_FILL,
         .lineWidth               = 1.0f,
-        .cullMode                = VK_CULL_MODE_BACK_BIT,
-        .frontFace               = VK_FRONT_FACE_CLOCKWISE,
+        .cullMode                = tConfig->tCullMode,
+        .frontFace               = tConfig->tFrontFace,
         .depthBiasEnable         = VK_FALSE
     };
 
@@ -437,7 +400,7 @@ hg_create_graphics_pipeline(hgAppData* ptState)
                           VK_COLOR_COMPONENT_G_BIT | 
                           VK_COLOR_COMPONENT_B_BIT | 
                           VK_COLOR_COMPONENT_A_BIT,
-        .blendEnable = VK_FALSE
+        .blendEnable    = tConfig->bBlendEnable
     };
 
     VkPipelineColorBlendStateCreateInfo tColorBlending = {
@@ -449,44 +412,26 @@ hg_create_graphics_pipeline(hgAppData* ptState)
         .blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f}
     };
 
-    // pipeline layout 
-    // reate descriptor set layout binding 
-    VkDescriptorSetLayoutBinding tTextureBinding = {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-    };
-
-    VkDescriptorSetLayoutCreateInfo tDescriptorLayoutInfo = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &tTextureBinding
-    };
-
-    VkDescriptorSetLayout tDescriptorSetLayout;
-    VULKAN_CHECK(vkCreateDescriptorSetLayout(ptState->tContextComponents.tDevice, &tDescriptorLayoutInfo, NULL, &tDescriptorSetLayout));
-
-    // store it in resources so we can use it later
-    ptState->tResources.tDescriptorSetLayout = tDescriptorSetLayout;
-
-    // update pipeline layout to include descriptor set
-    VkDescriptorSetLayout setLayouts[] = {tDescriptorSetLayout};
-
+    // Create pipeline layout using config
     VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = setLayouts,  // include descriptor set layout
-        .pushConstantRangeCount = 0,
-        .pPushConstantRanges = NULL
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount         = tConfig->uDescriptorSetLayoutCount,
+        .pSetLayouts            = tConfig->ptDescriptorSetLayouts,
+        .pushConstantRangeCount = tConfig->uPushConstantRangeCount,
+        .pPushConstantRanges    = tConfig->ptPushConstantRanges
     };
 
-    VULKAN_CHECK(vkCreatePipelineLayout(ptState->tContextComponents.tDevice, &tPipelineLayoutInfo, NULL, &ptState->tPipelineComponents.tPipelineLayout));
+    hgPipeline tPipelineResult = {0};
+
+    VULKAN_CHECK(vkCreatePipelineLayout(ptState->tContextComponents.tDevice, 
+                                        &tPipelineLayoutInfo, 
+                                        NULL, 
+                                        &tPipelineResult.tPipelineLayout));
 
     // create graphics pipeline
     VkGraphicsPipelineCreateInfo tPipelineInfo = {
         .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .stageCount          = 2, // IMPORTANT: Set to 2 for vertex+fragment shaders
+        .stageCount          = 2,
         .pStages             = tShaderStages,
         .pVertexInputState   = &tVertexInputInfo,
         .pInputAssemblyState = &tInputAssembly,
@@ -494,16 +439,26 @@ hg_create_graphics_pipeline(hgAppData* ptState)
         .pRasterizationState = &tRasterizer,
         .pMultisampleState   = &tMultisampling,
         .pColorBlendState    = &tColorBlending,
-        .layout              = ptState->tPipelineComponents.tPipelineLayout,
+        .pDepthStencilState  = NULL, // TODO: do we want this in the future?
+        .layout              = tPipelineResult.tPipelineLayout,
         .renderPass          = ptState->tPipelineComponents.tRenderPass,
-        .subpass             = 0
+        .subpass             = 0,
+        .basePipelineHandle  = VK_NULL_HANDLE,
+        .basePipelineIndex   = -1
     };
 
-    VULKAN_CHECK(vkCreateGraphicsPipelines(ptState->tContextComponents.tDevice, VK_NULL_HANDLE, 1, &tPipelineInfo, NULL, &ptState->tPipelineComponents.tPipeline));
+    VULKAN_CHECK(vkCreateGraphicsPipelines(ptState->tContextComponents.tDevice, 
+                                           VK_NULL_HANDLE, 
+                                           1, 
+                                           &tPipelineInfo, 
+                                           NULL, 
+                                           &tPipelineResult.tPipeline));
 
     // cleanup shader modules
     vkDestroyShaderModule(ptState->tContextComponents.tDevice, tVertShaderModule, NULL);
     vkDestroyShaderModule(ptState->tContextComponents.tDevice, tFragShaderModule, NULL);
+
+    return tPipelineResult;
 }
 
 void 
@@ -545,7 +500,7 @@ hg_create_command_pool(hgAppData* ptState)
 }
 
 void 
-hg_create_command_buffers(hgAppData* ptState) 
+hg_create_command_buffers(hgAppData* ptState, hgPipeline tPipeline)
 {
     ptState->tCommandComponents.tCommandBuffers = malloc(ptState->tSwapchainComponents.uSwapchainImageCount * sizeof(VkCommandBuffer));
 
@@ -585,13 +540,13 @@ hg_create_command_buffers(hgAppData* ptState)
         };
 
         vkCmdBeginRenderPass(ptState->tCommandComponents.tCommandBuffers[i], &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(ptState->tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, ptState->tPipelineComponents.tPipeline);
+        vkCmdBindPipeline(ptState->tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, tPipeline.tPipeline);
 
 
         if(ptState->tResources.tDescriptorSets != NULL && ptState->tResources.tDescriptorSets[0] != VK_NULL_HANDLE) {
             vkCmdBindDescriptorSets(ptState->tCommandComponents.tCommandBuffers[i], 
                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                   ptState->tPipelineComponents.tPipelineLayout,
+                                   tPipeline.tPipelineLayout,
                                    0,  // firstSet
                                    1,  // descriptorSetCount
                                    &ptState->tResources.tDescriptorSets[0],  // pDescriptorSets
@@ -1111,8 +1066,8 @@ hg_cleanup(hgAppData* ptState)
     if(ptState->tSwapchainComponents.tSwapchainImages)     free(ptState->tSwapchainComponents.tSwapchainImages);
     if(ptState->tCommandComponents.tCommandBuffers)        free(ptState->tCommandComponents.tCommandBuffers);
 
-    if(ptState->tPipelineComponents.tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tPipeline, NULL);
-    if(ptState->tPipelineComponents.tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tPipelineLayout, NULL);
+    // if(ptState->tPipelineComponents.tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tPipeline, NULL);
+    // if(ptState->tPipelineComponents.tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tPipelineLayout, NULL);
     if(ptState->tPipelineComponents.tRenderPass != VK_NULL_HANDLE)     vkDestroyRenderPass(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tRenderPass, NULL);
     if(ptState->tSwapchainComponents.tSwapchain != VK_NULL_HANDLE)     vkDestroySwapchainKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, NULL);
     if(ptState->tContextComponents.tDevice != VK_NULL_HANDLE)          vkDestroyDevice(ptState->tContextComponents.tDevice, NULL);
@@ -1138,6 +1093,12 @@ hg_cleanup(hgAppData* ptState)
         free(ptState->tResources.tDescriptorSets);
     }
 }
+
+void 
+hg_destroy_pipeline(hgAppData* ptState, hgPipeline* pipeline)
+{
+    
+};
 
 // -----------------------------------------------------------------------------
 // Helpers

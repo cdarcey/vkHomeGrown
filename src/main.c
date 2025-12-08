@@ -45,15 +45,15 @@ int main(void)
     // test buffer non indexed
     hgVertex* atVertices2 = malloc(sizeof(hgVertex) * 6);
 
-    // First triangle (counter-clockwise)
-    atVertices2[0] = (hgVertex){-1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
-    atVertices2[1] = (hgVertex){ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
-    atVertices2[2] = (hgVertex){ 1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    // First triangle (clockwise)
+    atVertices2[0] = (hgVertex){-0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices2[1] = (hgVertex){ 0.5f, -0.5f,  0.0f, 1.0f, 0.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices2[2] = (hgVertex){ 0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
 
-    // Second triangle (counter-clockwise)
-    atVertices2[3] = (hgVertex){ 1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
-    atVertices2[4] = (hgVertex){-1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
-    atVertices2[5] = (hgVertex){-1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    // Second triangle (clockwise)
+    atVertices2[3] = (hgVertex){ 0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices2[4] = (hgVertex){-0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 1.0f,  0.0f, 1.0f};  // top-left
+    atVertices2[5] = (hgVertex){-0.5f, -0.5f,  0.0f, 0.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
 
 
 
@@ -62,28 +62,28 @@ int main(void)
     uint16_t* atIndices = malloc(sizeof(uint16_t) * 24);   // 6 indices per quad * 4 quads = 24 indices
 
     // Quad 0: Bottom-left quadrant
-    atVertices[0] = (hgVertex){-1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
-    atVertices[1] = (hgVertex){ 0.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
-    atVertices[2] = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
-    atVertices[3] = (hgVertex){-1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+    atVertices[0] = (hgVertex){-1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[1] = (hgVertex){ 0.0f, -1.0f,  0.0f, 1.0f, 0.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[2] = (hgVertex){ 0.0f,  0.0f,  0.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[3] = (hgVertex){-1.0f,  0.0f,  1.0f, 1.0f, 0.0f, 1.0f,  0.0f, 1.0f};  // top-left
 
     // Quad 1: Bottom-right quadrant
-    atVertices[4] = (hgVertex){ 0.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
-    atVertices[5] = (hgVertex){ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
-    atVertices[6] = (hgVertex){ 1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
-    atVertices[7] = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+    atVertices[4] = (hgVertex){ 0.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[5] = (hgVertex){ 1.0f, -1.0f,  0.0f, 1.0f, 0.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[6] = (hgVertex){ 1.0f,  0.0f,  0.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[7] = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 0.0f, 1.0f,  0.0f, 1.0f};  // top-left
 
     // Quad 2: Top-left quadrant
-    atVertices[8]  = (hgVertex){-1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
-    atVertices[9]  = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
-    atVertices[10] = (hgVertex){ 0.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
-    atVertices[11] = (hgVertex){-1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+    atVertices[8]  = (hgVertex){-1.0f,  0.0f,  1.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[9]  = (hgVertex){ 0.0f,  0.0f,  0.0f, 1.0f, 0.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[10] = (hgVertex){ 0.0f,  1.0f,  0.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[11] = (hgVertex){-1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  0.0f, 1.0f};  // top-left
 
     // Quad 3: Top-right quadrant
-    atVertices[12] = (hgVertex){ 0.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
-    atVertices[13] = (hgVertex){ 1.0f,  0.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
-    atVertices[14] = (hgVertex){ 1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
-    atVertices[15] = (hgVertex){ 0.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f,  0.0f, 1.0f};  // top-left
+    atVertices[12] = (hgVertex){ 0.0f,  0.0f,  1.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f};  // bottom-left
+    atVertices[13] = (hgVertex){ 1.0f,  0.0f,  0.0f, 1.0f, 0.0f, 1.0f,  1.0f, 0.0f};  // bottom-right
+    atVertices[14] = (hgVertex){ 1.0f,  1.0f,  0.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};  // top-right
+    atVertices[15] = (hgVertex){ 0.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  0.0f, 1.0f};  // top-left
 
     // Indices for all 4 quads (each quad uses 6 indices)
     // Quad 0 indices
@@ -103,15 +103,16 @@ int main(void)
     atIndices[21] = 14; atIndices[22] = 15; atIndices[23] = 12;
 
     hgRenderPassConfig tConfig = {
-        .tLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .tStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .tLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .tStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
         .afClearColor = {1.0f, 1.0f, 1.0f, 1.0f}
     };
 
     // vkHomeGrown api
-    hg_create_swapchain(&tState, VK_PRESENT_MODE_MAILBOX_KHR);
+    hg_create_swapchain(&tState, VK_PRESENT_MODE_FIFO_KHR);
     hg_create_render_pass(&tState, &tConfig);
-    hg_create_graphics_pipeline(&tState);
+
+
     hg_create_framebuffers(&tState);
     hg_create_command_pool(&tState);
 
@@ -185,8 +186,8 @@ int main(void)
 
     // update descriptor set with texture
     VkDescriptorImageInfo tImageInfo = {
-        .sampler = tTextureSampler,
-        .imageView = tTestTexture.tImageView,
+        .sampler     = tTextureSampler,
+        .imageView   = tTestTexture.tImageView,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     };
 
@@ -202,10 +203,128 @@ int main(void)
 
     vkUpdateDescriptorSets(tState.tContextComponents.tDevice, 1, &tDescriptorWrite, 0, NULL);
 
+    // tests for new pipeline creation
+    VkVertexInputAttributeDescription tTestVertAttribs[3] = {
+        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,       .offset = offsetof(hgVertex, x)}, // pos
+        {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(hgVertex, r)}, // color
+        {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,       .offset = offsetof(hgVertex, u)}  // texcoord
+    };
 
-    hg_create_vertex_buffer(&tState, atVertices, atIndices, 16, 24);
+    hgPipelineConfig tTestConfig = {
+        .pcVertexShaderPath        = "./shaders/vert.spv",
+        .pcFragmentShaderPath      = "./shaders/frag.spv",
+        .uVertexStride             = sizeof(hgVertex),
+        .ptAttributeDescriptions   = tTestVertAttribs,
+        .uAttributeCount           = 3,
+        .bBlendEnable              = VK_FALSE,
+        .tCullMode                 = VK_CULL_MODE_NONE,
+        .tFrontFace                = VK_FRONT_FACE_CLOCKWISE,
+        .tTopology                 = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .ptDescriptorSetLayouts    = &tState.tResources.tDescriptorSetLayout,
+        .uDescriptorSetLayoutCount = 1,
+        .ptPushConstantRanges      = NULL,
+        .uPushConstantRangeCount   = 0
+    };
+
+
+    hgPipeline tTestPipeline = hg_create_graphics_pipeline(&tState, &tTestConfig);
+
+
+
+
+
+    hg_create_vertex_buffer(&tState, atVertices2, NULL, 6, 0);
+    // hg_create_vertex_buffer(&tState, atVertices, atIndices, 16, 24);
+
+
+
+    tState.tCommandComponents.tCommandBuffers = malloc(tState.tSwapchainComponents.uSwapchainImageCount * sizeof(VkCommandBuffer));
+
+    VkCommandBufferAllocateInfo tAllocInfo = {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = tState.tCommandComponents.tCommandPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = tState.tSwapchainComponents.uSwapchainImageCount
+    };
+    VULKAN_CHECK(vkAllocateCommandBuffers(tState.tContextComponents.tDevice, &tAllocInfo, tState.tCommandComponents.tCommandBuffers));
+
+    // record command buffers
+    for(uint32_t i = 0; i < tState.tSwapchainComponents.uSwapchainImageCount; i++) 
+    {
+        VkCommandBufferBeginInfo tBeginInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        };
+        VULKAN_CHECK(vkBeginCommandBuffer(tState.tCommandComponents.tCommandBuffers[i], &tBeginInfo));
+
+        VkClearValue tClearColor = {{{
+            tState.afClearColor[0],
+            tState.afClearColor[1],
+            tState.afClearColor[2],
+            tState.afClearColor[3]
+        }}};
+
+        VkRenderPassBeginInfo tRenderPassInfo = {
+            .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass  = tState.tPipelineComponents.tRenderPass,
+            .framebuffer = tState.tPipelineComponents.tFramebuffers[i],
+            .renderArea  = {
+                .offset  = {0, 0},
+                .extent  = tState.tSwapchainComponents.tExtent
+            },
+            .clearValueCount = 1,
+            .pClearValues    = &tClearColor
+        };
+
+        vkCmdBeginRenderPass(tState.tCommandComponents.tCommandBuffers[i], &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
+
+
+        if(tState.tResources.tDescriptorSets != NULL && tState.tResources.tDescriptorSets[0] != VK_NULL_HANDLE) {
+            vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[i], 
+                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                   tTestPipeline.tPipelineLayout,
+                                   0,  // firstSet
+                                   1,  // descriptorSetCount
+                                   &tState.tResources.tDescriptorSets[0],  // pDescriptorSets
+                                   0,  // dynamicOffsetCount
+                                   NULL);  // pDynamicOffsets
+        }
+
+
+
+        // bind vertex buffer
+        VkBuffer vertexBuffers[] = {tState.tResources.tVertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+        // bind index buffer
+        if(tState.tResources.tIndexBuffer == VK_NULL_HANDLE)
+        {
+            vkCmdDraw(tState.tCommandComponents.tCommandBuffers[i], tState.tResources.uVertexCount, 1, 0, 0);
+        }
+        else
+        {
+            vkCmdBindIndexBuffer(tState.tCommandComponents.tCommandBuffers[i], tState.tResources.tIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+            vkCmdDrawIndexed(tState.tCommandComponents.tCommandBuffers[i], tState.tResources.uIndexCount, 1, 0, 0, 0); // draw quad
+        }
+
+        vkCmdEndRenderPass(tState.tCommandComponents.tCommandBuffers[i]);
+
+        VULKAN_CHECK(vkEndCommandBuffer(tState.tCommandComponents.tCommandBuffers[i]));
+    }
+
+
+
+
+
+
+
+
+
+
+    // hg_create_vertex_buffer(&tState, atVertices, atIndices, 16, 24);
     // hg_create_vertex_buffer(&tState, atVertices2, NULL, 6, 0);
-    hg_create_command_buffers(&tState);
+    // hg_create_command_buffers(&tState, tTestPipeline);
     hg_create_sync_objects(&tState);
 
 
