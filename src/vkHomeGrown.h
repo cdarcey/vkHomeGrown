@@ -72,8 +72,8 @@ typedef struct _hgSwapchain
 typedef struct _hgRenderPipeline
 {
     VkRenderPass     tRenderPass;
-    VkPipelineLayout tPipelineLayout;
-    VkPipeline       tPipeline;
+    VkPipelineLayout tPipelineLayout; // TODO: remove from struct - handled on an as needed basis by hgPipeline instead of globally
+    VkPipeline       tPipeline;       // same as above
     VkFramebuffer*   tFramebuffers;
 } hgRenderPipeline;
 
@@ -95,15 +95,15 @@ typedef struct _hgFrameSync
 // game-specific rendering resources
 typedef struct _hgRenderResources
 {
-    VkBuffer       tVertexBuffer;
-    VkDeviceMemory tVertexBufferMemory;
-    size_t         szVertexBufferSize;
-    uint32_t       uVertexCount;
+    // VkBuffer       tVertexBuffer;  -> to be managed by api user
+    // VkDeviceMemory tVertexBufferMemory;
+    // size_t         szVertexBufferSize;
+    // uint32_t       uVertexCount;
 
-    VkBuffer       tIndexBuffer;
-    VkDeviceMemory tIndexBufferMemory;
-    size_t         szIndexBufferSize;
-    uint32_t       uIndexCount;
+    // VkBuffer       tIndexBuffer;
+    // VkDeviceMemory tIndexBufferMemory;
+    // size_t         szIndexBufferSize;
+    // uint32_t       uIndexCount;
 
     // descriptor sets for textures/uniforms
     VkDescriptorPool      tDescriptorPool;
@@ -144,26 +144,42 @@ typedef struct _hgTexture
     int            iHeight;
 } hgTexture;
 
+typedef struct _hgVertexBuffer
+{
+    VkBuffer       tBuffer;
+    VkDeviceMemory tMemory;
+    size_t         szSize;
+    uint32_t       uVertexCount;
+} hgVertexBuffer;
+
+typedef struct _hgIndexBuffer
+{
+    VkBuffer       tBuffer;
+    VkDeviceMemory tMemory;
+    size_t         szSize;
+    uint32_t       uIndexCount;
+} hgIndexBuffer;
+
 
 // TODO: do you really want to go down this road or just leave descriptors upto api user?
 typedef struct _hgDescriptorPoolConfig 
 {
-    uint32_t                    uMaxSets;      // Maximum number of descriptor sets
-    uint32_t                    uNumPoolSizes; // Number of different descriptor types
-    VkDescriptorPoolSize*       pPoolSizes;    // Array of descriptor type counts
-    VkDescriptorPoolCreateFlags tFlags;        // Creation flags
+    uint32_t                    uMaxSets;      // maximum number of descriptor sets
+    uint32_t                    uNumPoolSizes; // number of different descriptor types
+    VkDescriptorPoolSize*       pPoolSizes;    // array of descriptor type counts
+    VkDescriptorPoolCreateFlags tFlags;        // creation flags
 } hgDescriptorPoolConfig;
 
 typedef struct _hgDescriptorLayoutConfig 
 {
-    uint32_t                      uNumBindings; // Number of bindings in the layout
-    VkDescriptorSetLayoutBinding* pBindings;    // Array of bindings
+    uint32_t                      uNumBindings; // number of bindings in the layout
+    VkDescriptorSetLayoutBinding* pBindings;    // array of bindings
 } hgDescriptorLayoutConfig;
 
 typedef struct _hgDescriptorAllocConfig 
 {
-    uint32_t               uNumSets;    // Number of sets to allocate
-    VkDescriptorSetLayout* pLayouts;    // Array of layouts (one per set)
+    uint32_t               uNumSets;    // number of sets to allocate
+    VkDescriptorSetLayout* pLayouts;    // array of layouts (one per set)
 } hgDescriptorAllocConfig;
 
 typedef struct _hgRenderPassConfig
@@ -181,12 +197,9 @@ typedef struct _hgPipelineConfig
     const char* pcFragmentShaderPath;
 
     // vertex input description
-    uint32_t                           uVertexStride;
     VkVertexInputAttributeDescription* ptAttributeDescriptions;
     uint32_t                           uAttributeCount;
-
-    // blend mode
-    VkBool32 bBlendEnable;
+    uint32_t                           uVertexStride;
 
     // rasterization
     VkCullModeFlags tCullMode;  // VK_CULL_MODE_BACK_BIT, VK_CULL_MODE_FRONT_BIT, VK_CULL_MODE_NONE
@@ -199,9 +212,12 @@ typedef struct _hgPipelineConfig
     VkDescriptorSetLayout* ptDescriptorSetLayouts;
     uint32_t               uDescriptorSetLayoutCount;
 
-    // push constants -> for future addition
+    // not currently used -> for future addition
+    // push constants
     VkPushConstantRange* ptPushConstantRanges;
     uint32_t             uPushConstantRangeCount;
+    // blend mode
+    VkBool32 bBlendEnable;
 
 } hgPipelineConfig;
 
@@ -240,7 +256,6 @@ typedef struct _hgPipeline
 
     // Command Buffer Management
     void hg_create_command_pool(hgAppData* ptState);
-    void hg_create_command_buffers(hgAppData* ptState, hgPipeline tPipeline);
     // void hg_recreate_command_buffers(hgAppData* ptState);  // For swapchain recreation
 
     // Synchronization Objects
@@ -256,7 +271,8 @@ typedef struct _hgPipeline
     void     hg_create_buffer(hgVulkanContext* ptContextComponents, VkDeviceSize tSize, VkBufferUsageFlags tUsage, VkMemoryPropertyFlags tProperties, VkBuffer* pBuffer, VkDeviceMemory* pMemory);
     void     hg_copy_buffer(hgVulkanContext* ptContextComponents, hgCommandResources* ptCommandComponents, VkBuffer tSrcBuffer, VkBuffer tDstBuffer, VkDeviceSize tSize);
     // Vertex/Index Buffer Creation
-    void hg_create_vertex_buffer(hgAppData* ptState, hgVertex* tVertexBuffer, uint16_t* uIndexBuffer, uint32_t uVertexCount, uint32_t uIndexCount);
+    hgVertexBuffer hg_create_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride);
+    hgIndexBuffer  hg_create_index_buffer(hgAppData* ptState, uint16_t* indices, uint32_t count);
     // Descriptor Management
     void hg_create_descriptor_set(hgAppData* ptState); // TODO: do you really want to go down this road of descriptor managment or let api user manage them?
     // VkDescriptorSetLayoutBinding hg_create_binding(uint32_t uBinding, VkDescriptorType tType, VkShaderStageFlags tStageFlags, uint32_t uDescriptorCount);

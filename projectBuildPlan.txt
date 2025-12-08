@@ -3,31 +3,17 @@
 ## Application Lifetime
 
 
-### hg_create_instance(hgAppData* ptState)
-- Currently fine as-is for basic usage
-- Future: hg_create_instance(hgAppData* ptState, const char* appName, uint32_t appVersion, bool enableValidation)
-- Reason: Different app names, optional validation layers for release builds
-
-### hg_create_surface(hgAppData* ptState)
-- Fine as-is (GLFW handles platform differences)
-
 ### hg_pick_physical_device(hgAppData* ptState)
 - Currently just picks first GPU
 - Future: hg_pick_physical_device(hgAppData* ptState, hgDevicePreferences* prefs)
 - Where hgDevicePreferences might include: prefer discrete GPU, minimum memory requirements, required features
+
 
 ### hg_create_logical_device(hgAppData* ptState)
 - Currently fine for basic graphics
 - Future needs: enabling device features (samplerAnisotropy, geometryShader, etc.)
 - Future: hg_create_logical_device(hgAppData* ptState, VkPhysicalDeviceFeatures* enabledFeatures)
 
-### hg_create_command_pool(hgAppData* ptState)
-- Fine as-is
-
-### hg_create_render_pass(hgAppData* ptState)
-- Currently hardcoded: clear color to black, single color attachment
-- Future: hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* config)
-- Where config includes: clear color, depth attachment (yes/no), load/store ops, multisampling
 
 ### hg_create_sync_objects(hgAppData* ptState)
 - Currently creates exactly 1 fence and 2 semaphores
@@ -35,33 +21,6 @@
 - Change to: hg_create_sync_objects(hgAppData* ptState, uint32_t maxFramesInFlight)
 - Store arrays of fences/semaphores (typically maxFramesInFlight = 2 or 3)
 
----
-
-## Swapchain Lifetime
-
-### hg_create_swapchain(hgAppData* ptState)
-- Currently picks FIFO present mode (vsync on)
-- Future: hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR preferredPresentMode)
-- Options: FIFO (vsync), MAILBOX (triple buffer), IMMEDIATE (no vsync)
-
-### hg_create_graphics_pipeline(hgAppData* ptState)
-- **This is your BIGGEST problem for flexibility**
-- Currently hardcoded: specific vertex format, specific shaders, specific blend mode, cull mode, etc.
-- You'll need MULTIPLE pipelines for different rendering needs
-- Redesign: hgPipeline hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* config)
-- Where hgPipelineConfig includes:
-  - Shader paths (vert/frag)
-  - Vertex input description (stride, attributes)
-  - Blend enable/disable
-  - Cull mode (back, front, none)
-  - Topology (triangle list, line list, etc.)
-  - Descriptor set layouts to use
-  - Push constant ranges
-- Return a pipeline handle, not store in ptState (you need many!)
-- For Monopoly: You might have 2-3 pipelines (textured sprites, solid color UI, debug lines)
-
-### hg_create_framebuffers(hgAppData* ptState)
-- Fine as-is (tied to swapchain images)
 
 ---
 
