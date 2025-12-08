@@ -283,7 +283,7 @@ typedef struct _hgPipeline
     // Textures
     unsigned char* hg_load_texture_data(const char* pcFileName, int* iWidthOut, int* iHeightOut);
     hgTexture      hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, int iHeight);
-    void           hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture);
+
 
 // -------------------------------
 // Shader Management
@@ -298,6 +298,7 @@ typedef struct _hgPipeline
     // void hg_cleanup_pipeline(hgAppData* ptState);
     // void hg_cleanup_buffers(hgAppData* ptState);
     void hg_destroy_pipeline(hgAppData* ptState, hgPipeline* pipeline);
+    void hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture);
 
 // -----------------------------------------------------------------------------
 // Helpers

@@ -826,18 +826,9 @@ hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, 
     return tTexture;
 }
 
-// Texture cleanup
-void 
-hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture)
-{
-    if(tTexture->tImageView != VK_NULL_HANDLE) vkDestroyImageView(ptState->tContextComponents.tDevice, tTexture->tImageView, NULL);
-    if(tTexture->tImage != VK_NULL_HANDLE)     vkDestroyImage(ptState->tContextComponents.tDevice, tTexture->tImage, NULL);
-    if(tTexture->tMemory != VK_NULL_HANDLE)    vkFreeMemory(ptState->tContextComponents.tDevice, tTexture->tMemory, NULL);
 
-    memset(tTexture, 0, sizeof(hgTexture));
-}
 
-// Internal upload helper
+// internal upload helper
 void 
 hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pData, int iWidth, int iHeight)
 {
@@ -846,10 +837,8 @@ hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pDat
     // create staging buffer
     VkBuffer       tStagingBuffer;
     VkDeviceMemory tStagingBufferMemory;
-    hg_create_buffer(&ptState->tContextComponents, imageSize,
-                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                     &tStagingBuffer, &tStagingBufferMemory);
+    hg_create_buffer(&ptState->tContextComponents, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &tStagingBuffer, &tStagingBufferMemory);
 
     // copy data to staging buffer
     void* pMapped;
@@ -860,7 +849,7 @@ hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pDat
     // record copy commands
     VkCommandBuffer tCmdBuffer = hg_begin_single_time_commands(ptState);
 
-    // Transition to transfer dst
+    // transition to transfer dst
     VkImageSubresourceRange tSubResRan = {
         .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
         .baseMipLevel   = 0,
@@ -869,13 +858,8 @@ hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pDat
         .layerCount     = 1
     };
 
-    hg_transition_image_layout(tCmdBuffer, 
-                          tImage, 
-                          VK_IMAGE_LAYOUT_UNDEFINED, 
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          tSubResRan,
-                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                          VK_PIPELINE_STAGE_TRANSFER_BIT);
+    hg_transition_image_layout(tCmdBuffer, tImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+        tSubResRan, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     // copy buffer to image
     VkBufferImageCopy tRegion = {
@@ -894,12 +878,9 @@ hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pDat
     vkCmdCopyBufferToImage(tCmdBuffer, tStagingBuffer, tImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &tRegion);
 
     // transition to shader read
-    hg_transition_image_layout(tCmdBuffer, tImage, 
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              tSubResRan,
-                              VK_PIPELINE_STAGE_TRANSFER_BIT,
-                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    hg_transition_image_layout(tCmdBuffer, tImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tSubResRan, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
     hg_end_single_time_commands(ptState, tCmdBuffer);
 
@@ -975,55 +956,148 @@ hg_create_shader_module(hgAppData* ptState, const char* pcFilename)
 void 
 hg_cleanup(hgAppData* ptState) 
 {
-
-    // TODO: this is not a good resource clean up solution need to come up with better alternative
+    // TODO: cleanup function is temporary and alternate clean up scenario needed
     vkDeviceWaitIdle(ptState->tContextComponents.tDevice);
 
-    // cleanup vulkan resources
-    if(ptState->tSyncComponents.tImageAvailable != VK_NULL_HANDLE) vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tImageAvailable, NULL);
-    if(ptState->tSyncComponents.tRenderFinished != VK_NULL_HANDLE) vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tRenderFinished, NULL);
-    if(ptState->tSyncComponents.tInFlight != VK_NULL_HANDLE)       vkDestroyFence(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tInFlight, NULL);
-
-    if(ptState->tCommandComponents.tCommandPool != VK_NULL_HANDLE) vkDestroyCommandPool(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, NULL);
-
-    for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
+    if(ptState->tCommandComponents.tCommandBuffers) 
     {
-        if(ptState->tPipelineComponents.tFramebuffers[i] != VK_NULL_HANDLE)         vkDestroyFramebuffer(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tFramebuffers[i], NULL);
-        if(ptState->tSwapchainComponents.tSwapchainImageViews[i] != VK_NULL_HANDLE) vkDestroyImageView(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchainImageViews[i], NULL);
+        vkFreeCommandBuffers(ptState->tContextComponents.tDevice, 
+                           ptState->tCommandComponents.tCommandPool,
+                           ptState->tSwapchainComponents.uSwapchainImageCount,
+                           ptState->tCommandComponents.tCommandBuffers);
+        free(ptState->tCommandComponents.tCommandBuffers);
+        ptState->tCommandComponents.tCommandBuffers = NULL;
     }
 
-    if(ptState->tPipelineComponents.tFramebuffers)         free(ptState->tPipelineComponents.tFramebuffers);
-    if(ptState->tSwapchainComponents.tSwapchainImageViews) free(ptState->tSwapchainComponents.tSwapchainImageViews);
-    if(ptState->tSwapchainComponents.tSwapchainImages)     free(ptState->tSwapchainComponents.tSwapchainImages);
-    if(ptState->tCommandComponents.tCommandBuffers)        free(ptState->tCommandComponents.tCommandBuffers);
-
-    // if(ptState->tPipelineComponents.tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tPipeline, NULL);
-    // if(ptState->tPipelineComponents.tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tPipelineLayout, NULL);
-    if(ptState->tPipelineComponents.tRenderPass != VK_NULL_HANDLE)     vkDestroyRenderPass(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tRenderPass, NULL);
-    if(ptState->tSwapchainComponents.tSwapchain != VK_NULL_HANDLE)     vkDestroySwapchainKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, NULL);
-    if(ptState->tContextComponents.tDevice != VK_NULL_HANDLE)          vkDestroyDevice(ptState->tContextComponents.tDevice, NULL);
-    if(ptState->tSwapchainComponents.tSurface != VK_NULL_HANDLE)       vkDestroySurfaceKHR(ptState->tContextComponents.tInstance, ptState->tSwapchainComponents.tSurface, NULL);
-    if(ptState->tContextComponents.tInstance != VK_NULL_HANDLE)        vkDestroyInstance(ptState->tContextComponents.tInstance, NULL);
-
-    // TODO: temp for testing
-    if(ptState->tResources.tDescriptorPool != VK_NULL_HANDLE) {
-        vkDestroyDescriptorPool(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorPool, NULL);
+    if(ptState->tCommandComponents.tCommandPool != VK_NULL_HANDLE) 
+    {
+        vkDestroyCommandPool(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, NULL);
+        ptState->tCommandComponents.tCommandPool = VK_NULL_HANDLE;
     }
 
-    if(ptState->tResources.tDescriptorSetLayout != VK_NULL_HANDLE) {
-        vkDestroyDescriptorSetLayout(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorSetLayout, NULL);
+
+    if(ptState->tSyncComponents.tImageAvailable != VK_NULL_HANDLE) 
+    {
+        vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tImageAvailable, NULL);
+        ptState->tSyncComponents.tImageAvailable = VK_NULL_HANDLE;
+    }
+    if(ptState->tSyncComponents.tRenderFinished != VK_NULL_HANDLE) 
+    {
+        vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tRenderFinished, NULL);
+        ptState->tSyncComponents.tRenderFinished = VK_NULL_HANDLE;
+    }
+    if(ptState->tSyncComponents.tInFlight != VK_NULL_HANDLE) 
+    {
+        vkDestroyFence(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tInFlight, NULL);
+        ptState->tSyncComponents.tInFlight = VK_NULL_HANDLE;
     }
 
-    if(ptState->tResources.tDescriptorSets) {
+    if(ptState->tPipelineComponents.tFramebuffers) 
+    {
+        for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
+        {
+            if(ptState->tPipelineComponents.tFramebuffers[i] != VK_NULL_HANDLE) 
+            {
+                vkDestroyFramebuffer(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tFramebuffers[i], NULL);
+                ptState->tPipelineComponents.tFramebuffers[i] = VK_NULL_HANDLE;
+            }
+        }
+        free(ptState->tPipelineComponents.tFramebuffers);
+        ptState->tPipelineComponents.tFramebuffers = NULL;
+    }
+
+    if(ptState->tResources.tDescriptorSets && ptState->tResources.tDescriptorPool != VK_NULL_HANDLE) 
+    {
+        if(ptState->tResources.tDescriptorSets[0] != VK_NULL_HANDLE) 
+        {
+            vkFreeDescriptorSets(ptState->tContextComponents.tDevice, 
+                               ptState->tResources.tDescriptorPool,
+                               1,  // count
+                               ptState->tResources.tDescriptorSets);
+        }
         free(ptState->tResources.tDescriptorSets);
+    }
+
+    if(ptState->tResources.tDescriptorPool != VK_NULL_HANDLE) 
+    {
+        vkDestroyDescriptorPool(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorPool, NULL);
+        ptState->tResources.tDescriptorPool = VK_NULL_HANDLE;
+    }
+
+    if(ptState->tResources.tDescriptorSetLayout != VK_NULL_HANDLE) 
+    {
+        vkDestroyDescriptorSetLayout(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorSetLayout, NULL);
+        ptState->tResources.tDescriptorSetLayout = VK_NULL_HANDLE;
+    }
+
+    if(ptState->tPipelineComponents.tRenderPass != VK_NULL_HANDLE) 
+    {
+        vkDestroyRenderPass(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tRenderPass, NULL);
+        ptState->tPipelineComponents.tRenderPass = VK_NULL_HANDLE;
+    }
+
+    if(ptState->tSwapchainComponents.tSwapchainImageViews) 
+    {
+        for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++)
+        {
+            if(ptState->tSwapchainComponents.tSwapchainImageViews[i] != VK_NULL_HANDLE)
+            {
+                vkDestroyImageView(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchainImageViews[i], NULL);
+                ptState->tSwapchainComponents.tSwapchainImageViews[i] = VK_NULL_HANDLE;
+            }
+        }
+        free(ptState->tSwapchainComponents.tSwapchainImageViews);
+        ptState->tSwapchainComponents.tSwapchainImageViews = NULL;
+    }
+
+    if(ptState->tSwapchainComponents.tSwapchainImages) 
+    {
+        free(ptState->tSwapchainComponents.tSwapchainImages);
+        ptState->tSwapchainComponents.tSwapchainImages = NULL;
+    }
+
+    if(ptState->tSwapchainComponents.tSwapchain != VK_NULL_HANDLE) 
+    {
+        vkDestroySwapchainKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, NULL);
+        ptState->tSwapchainComponents.tSwapchain = VK_NULL_HANDLE;
+    }
+
+    if(ptState->tSwapchainComponents.tSurface != VK_NULL_HANDLE) 
+    {
+        vkDestroySurfaceKHR(ptState->tContextComponents.tInstance, ptState->tSwapchainComponents.tSurface, NULL);
+        ptState->tSwapchainComponents.tSurface = VK_NULL_HANDLE;
+    }
+
+    if(ptState->tContextComponents.tDevice != VK_NULL_HANDLE) {
+        vkDestroyDevice(ptState->tContextComponents.tDevice, NULL);
+        ptState->tContextComponents.tDevice = VK_NULL_HANDLE;
+    }
+
+    if(ptState->tContextComponents.tInstance != VK_NULL_HANDLE) 
+    {
+        vkDestroyInstance(ptState->tContextComponents.tInstance, NULL);
+        ptState->tContextComponents.tInstance = VK_NULL_HANDLE;
     }
 }
 
 void 
-hg_destroy_pipeline(hgAppData* ptState, hgPipeline* pipeline)
+hg_destroy_pipeline(hgAppData* ptState, hgPipeline* tPipeline)
 {
-    
+    if(tPipeline->tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline      (ptState->tContextComponents.tDevice, tPipeline->tPipeline, NULL);
+    if(tPipeline->tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptState->tContextComponents.tDevice, tPipeline->tPipelineLayout, NULL);
+
 };
+
+// Texture cleanup
+void 
+hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture)
+{
+    if(tTexture->tImageView != VK_NULL_HANDLE) vkDestroyImageView(ptState->tContextComponents.tDevice, tTexture->tImageView, NULL);
+    if(tTexture->tImage != VK_NULL_HANDLE)     vkDestroyImage(ptState->tContextComponents.tDevice, tTexture->tImage, NULL);
+    if(tTexture->tMemory != VK_NULL_HANDLE)    vkFreeMemory(ptState->tContextComponents.tDevice, tTexture->tMemory, NULL);
+
+    memset(tTexture, 0, sizeof(hgTexture));
+}
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -1071,13 +1145,9 @@ hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer tCommandBuffer)
 
 // Image layout transition helper
 void 
-hg_transition_image_layout(VkCommandBuffer tCommandBuffer, 
-                          VkImage tImage, 
-                          VkImageLayout tOldLayout, 
-                          VkImageLayout tNewLayout, 
-                          VkImageSubresourceRange tSubresourceRange, 
-                          VkPipelineStageFlags tSrcStageMask, 
-                          VkPipelineStageFlags tDstStageMask) 
+hg_transition_image_layout(VkCommandBuffer tCommandBuffer, VkImage tImage, VkImageLayout tOldLayout, 
+    VkImageLayout tNewLayout, VkImageSubresourceRange tSubresourceRange, VkPipelineStageFlags tSrcStageMask, 
+    VkPipelineStageFlags tDstStageMask) 
 {
     VkImageMemoryBarrier tBarrier = {
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -1155,11 +1225,5 @@ hg_transition_image_layout(VkCommandBuffer tCommandBuffer,
             break;
     }
 
-    vkCmdPipelineBarrier(tCommandBuffer, 
-                        tSrcStageMask, 
-                        tDstStageMask, 
-                        0, 
-                        0, NULL,   // Memory barriers
-                        0, NULL,   // Buffer memory barriers
-                        1, &tBarrier); // Image memory barriers
+    vkCmdPipelineBarrier(tCommandBuffer, tSrcStageMask, tDstStageMask, 0, 0, NULL, 0, NULL, 1, &tBarrier);
 }

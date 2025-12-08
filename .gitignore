@@ -1,7 +1,6 @@
-# directories
-out/
-
-
 # extensions 
 .pdb
 .exe
+
+# directories
+out/

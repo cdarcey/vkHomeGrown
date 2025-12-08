@@ -26,18 +26,9 @@
 
 ## Scene Lifetime
 
-### hg_create_vertex_buffer(hgAppData* ptState, hgVertex* vertices, uint16_t* indices, uint32_t vertexCount, uint32_t indexCount)
-- Major problem: stores in ptState, only allows ONE buffer
-- Redesign: hgBuffer hg_create_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride)
-- Redesign: hgBuffer hg_create_index_buffer(hgAppData* ptState, uint16_t* indices, uint32_t count)
-- Return buffer handles, don't store globally
-- User manages multiple buffers
-- For Monopoly: You might have 50+ buffers (one per sprite type, or one big buffer with offsets)
 
 ### Texture system (currently inline in main)
 - Need proper functions:
-- hgTexture hg_create_texture(hgAppData* ptState, unsigned char* data, int width, int height) - already exists!
-- void hg_destroy_texture(hgAppData* ptState, hgTexture* texture) - already exists!
 - hgSampler hg_create_sampler(hgAppData* ptState, hgSamplerConfig* config) - **NEW**, extract from main
 - void hg_destroy_sampler(hgAppData* ptState, hgSampler sampler) - **NEW**
 
