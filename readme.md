@@ -1,3 +1,8 @@
+# Disclaimer
+- Heavily under construction, things will change often and likely break often
+- Im very new to Vulkan and am building this project to learn it so most things will likely not be done great for now
+- Im not sure how far I will take this at this point in time
+
 # vkHomeGrown
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
@@ -12,10 +17,12 @@ A lightweight, educational Vulkan rendering framework written in C. Designed for
 - [Features](#features)
 - [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
+- [Learning Resources](#learning-resources)
 - [API Reference](#api-reference)
 - [Examples](#examples)
 - [Limitations](#limitations)
 - [Acknowledgments](#acknowledgments)
+- [Related Projects](#related-projects)
 
 ## 📋 Overview
 
@@ -48,6 +55,7 @@ Perfect for:
 ### Installation
 
 ```bash
+# Still working on a more portable solution (I use a custom batch file)
 # Clone the repository
 git clone https://github.com/username/vkHomeGrown.git
 cd vkHomeGrown
