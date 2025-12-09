@@ -407,7 +407,7 @@ hg_recreate_swapchain(hgAppData* ptState)
     // recreate swapchain with new size
     hg_create_swapchain(ptState, VK_PRESENT_MODE_FIFO_KHR);
 
-    // recreate all swapchain-dependent resources
+    // recreate all swapchain dependent resources
     hg_create_framebuffers(ptState);        // framebuffers depend on swapchain images
     hg_allocate_frame_cmd_buffers(ptState); // command buffers should be recreated
 
@@ -421,7 +421,7 @@ hg_recreate_swapchain(hgAppData* ptState)
 // =============================================================================
 
 // -------------------------------
-// Buffers
+// buffers
 // -------------------------------
 hgVertexBuffer 
 hg_create_vertex_buffer(hgAppData* ptAppData, void* data, size_t size, size_t stride)
@@ -495,7 +495,7 @@ hg_create_index_buffer(hgAppData* ptAppData, uint16_t* indices, uint32_t count)
 }
 
 // -------------------------------
-// Textures
+// textures
 // -------------------------------
 unsigned char*
 hg_load_texture_data(const char* pcFileName, int* iWidthOut, int* iHeightOut)
@@ -568,7 +568,7 @@ hg_create_texture(hgAppData* ptAppData, const unsigned char* pucData, int iWidth
 }
 
 // -------------------------------
-// Pipelines
+// pipelines
 // -------------------------------
 hgPipeline
 hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
@@ -717,7 +717,7 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
 // =============================================================================
 
 // -------------------------------
-// Frame Lifecycle
+// frame lifecycle
 // -------------------------------
 uint32_t 
 hg_begin_frame(hgAppData* ptState)
@@ -778,7 +778,7 @@ hg_end_frame(hgAppData* ptState, uint32_t uImageIndex)
 }
 
 // -------------------------------
-// Render Pass
+// render pass
 // -------------------------------
 void 
 hg_begin_render_pass(hgAppData* ptState, uint32_t uImageIndex) 
@@ -816,19 +816,19 @@ hg_end_render_pass(hgAppData* ptState)
 }
 
 // -------------------------------
-// Bind State
+// bind state
 // -------------------------------
-// TODO: Implement hg_cmd_bind_pipeline, hg_cmd_bind_vertex_buffer, etc.
+// TODO: implement hg_cmd_bind_pipeline, hg_cmd_bind_vertex_buffer, etc.
 
 // -------------------------------
-// Draw Commands
+// draw commands
 // -------------------------------
-// TODO: Implement hg_cmd_draw, hg_cmd_draw_indexed, etc.
+// TODO: implement hg_cmd_draw, hg_cmd_draw_indexed, etc.
 
 // -------------------------------
-// Convenience Wrappers
+// convenience wrappers
 // -------------------------------
-// TODO: Implement hg_draw_mesh
+// TODO: implement hg_draw_mesh
 
 // =============================================================================
 // CLEANUP
@@ -1001,7 +1001,7 @@ hg_destroy_texture(hgAppData* ptAppData, hgTexture* tTexture)
 // =============================================================================
 
 // -------------------------------
-// Memory & Buffer Helpers
+// memory & buffer helpers
 // -------------------------------
 uint32_t 
 hg_find_memory_type(hgVulkanContext* ptContext, uint32_t uTypeFilter, VkMemoryPropertyFlags tProperties)
@@ -1091,7 +1091,7 @@ void hg_copy_buffer(hgVulkanContext* ptContext, hgCommandResources* ptCommands, 
 }
 
 // -------------------------------
-// Single Time Commands
+// single time commands
 // -------------------------------
 VkCommandBuffer 
 hg_begin_single_time_commands(hgAppData* ptAppData) 
@@ -1133,7 +1133,7 @@ hg_end_single_time_commands(hgAppData* ptAppData, VkCommandBuffer tCommandBuffer
 }
 
 // -------------------------------
-// Image Operations
+// image operations
 // -------------------------------
 void 
 hg_transition_image_layout(VkCommandBuffer tCommandBuffer, VkImage tImage, VkImageLayout tOldLayout, 
@@ -1279,7 +1279,7 @@ hg_upload_to_image(hgAppData* ptAppData, VkImage tImage, const unsigned char* pD
 }
 
 // -------------------------------
-// shader Loading
+// shader loading
 // -------------------------------
 VkShaderModule 
 hg_create_shader_module(hgAppData* ptAppData, const char* pcFilename) 
@@ -1340,7 +1340,7 @@ hg_create_shader_module(hgAppData* ptAppData, const char* pcFilename)
 }
 
 // -------------------------------
-// command Buffer Access
+// command buffer access
 // -------------------------------
 VkCommandBuffer 
 hg_get_current_frame_cmd_buffer(hgAppData* ptState) 
@@ -1349,7 +1349,7 @@ hg_get_current_frame_cmd_buffer(hgAppData* ptState)
 }
 
 // -------------------------------
-// descriptor Management (stub)
+// descriptor management
 // -------------------------------
 void hg_create_descriptor_set(hgAppData* ptAppData)
 {
