@@ -387,6 +387,7 @@ This is an educational project with some intentional limitations:
 - GLFW developers for excellent windowing library
 - All the Vulkan tutorials and documentation that made this possible
 - The open source graphics programming community
+- Special thanks to [Jonathan Hoffstadt](https://github.com/hoffstadt) 
 
 
 ## 🔗 Related Projects

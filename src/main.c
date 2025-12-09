@@ -171,7 +171,7 @@ int main(void)
     hgPipelineConfig tTestConfig = {
         .pcVertexShaderPath        = "./shaders/vert.spv",
         .pcFragmentShaderPath      = "./shaders/frag.spv",
-        .uVertexStride             = sizeof(hgVertex),
+        .uVertexStride             = sizeof(float) * 8,
         .ptAttributeDescriptions   = tTestVertAttribs,
         .uAttributeCount           = 3,
         .bBlendEnable              = VK_FALSE,
