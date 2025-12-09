@@ -1,23 +1,15 @@
 // =============================================================================
 // TABLE OF CONTENTS
 // =============================================================================
-/* Window & Platform Management
-    ->Core Vulkan Context Initialization
-    ->Swapchain Management
-    ->Render Pipeline (RenderPass + Pipeline)
-    ->Command Buffer Management
-    ->Synchronization Objects
-    ->Frame Rendering Loop
-    ->Resource Creation & Management
-        -Buffers & Memory
-        -Vertex/Index Buffer Creation
-        -Descriptor Management
-        -Textures
-    ->Shader Management
-    ->Cleanup & Resource Destruction
-    ->Helpers
+/*
+    -> [SECTION] INTERNAL API DECLARATIONS
+    -> [SECTION] INITIALIZATION & SETUP
+    -> [SECTION] SWAPCHAIN & RENDER PASS
+    -> [SECTION] RESOURCE CREATION
+    -> [SECTION] FRAME RENDERING
+    -> [SECTION] CLEANUP
+    -> [SECTION] INTERNAL HELPERS
 */
-// =============================================================================
 
 #include "vkHomeGrown.h"
 #include <assert.h>
@@ -28,15 +20,33 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-// -----------------------------------------------------------------------------
-// Window & Platform Management
-// -----------------------------------------------------------------------------
+// =============================================================================
+// INTERNAL API DECLARATIONS
+// =============================================================================
 
+// low-level buffer operations
+uint32_t hg_find_memory_type(hgVulkanContext* context, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+void     hg_create_buffer(hgVulkanContext* context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* memory);
+void     hg_copy_buffer(hgVulkanContext* context, hgCommandResources* commands, VkBuffer src, VkBuffer dst, VkDeviceSize size);
 
+// one-time command helpers
+VkCommandBuffer hg_begin_single_time_commands(hgAppData* ptState);
+void            hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer cmdBuffer);
 
-// -----------------------------------------------------------------------------
-// Core Vulkan Context Initialization
-// -----------------------------------------------------------------------------
+// image operations
+void hg_transition_image_layout(VkCommandBuffer cmdBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange subresourceRange, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage);
+void hg_upload_to_image(hgAppData* ptState, VkImage image, const unsigned char* data, int width, int height);
+
+// shader loading
+VkShaderModule hg_create_shader_module(hgAppData* ptState, const char* filename);
+
+// command buffer access
+VkCommandBuffer hg_get_current_frame_cmd_buffer(hgAppData* ptState);
+
+// =============================================================================
+// INITIALIZATION & SETUP (Call once at startup)
+// =============================================================================
+
 void
 hg_create_instance(hgAppData* ptAppData, const char* pcAppName, uint32_t uAppVersion, bool bEnableValidation)
 {
@@ -60,7 +70,8 @@ hg_create_instance(hgAppData* ptAppData, const char* pcAppName, uint32_t uAppVer
         .ppEnabledExtensionNames = glfwExtensions       // Use GLFW's extensions
     };
 
-    // Optional: Add validation layers if needed
+    // TODO: figure this system out 
+    // optional: Add validation layers if needed 
     if(bEnableValidation)
     {
         const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
@@ -148,9 +159,54 @@ hg_create_logical_device(hgAppData* ptAppData)
     vkGetDeviceQueue(ptAppData->tContextComponents.tDevice, ptAppData->tContextComponents.tGraphicsQueueFamily, 0, &ptAppData->tContextComponents.tGraphicsQueue);
 }
 
-// -----------------------------------------------------------------------------
-// Swapchain Management
-// -----------------------------------------------------------------------------
+void 
+hg_create_command_pool(hgAppData* ptAppData) 
+{
+    VkCommandPoolCreateInfo tPoolInfo = {
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = ptAppData->tContextComponents.tGraphicsQueueFamily
+    };
+
+    VULKAN_CHECK(vkCreateCommandPool(ptAppData->tContextComponents.tDevice, &tPoolInfo, NULL, &ptAppData->tCommandComponents.tCommandPool));
+}
+
+void 
+hg_create_sync_objects(hgAppData* ptAppData) 
+{
+    VkSemaphoreCreateInfo tSemaphoreInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+    };
+
+    VkFenceCreateInfo tFenceInfo = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+
+    VULKAN_CHECK(vkCreateSemaphore(ptAppData->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptAppData->tSyncComponents.tImageAvailable));
+    VULKAN_CHECK(vkCreateSemaphore(ptAppData->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptAppData->tSyncComponents.tRenderFinished));
+    VULKAN_CHECK(vkCreateFence(ptAppData->tContextComponents.tDevice, &tFenceInfo, NULL, &ptAppData->tSyncComponents.tInFlight));
+}
+
+// specific to frame command buffers only -> used on swapchain recreation as well
+void 
+hg_allocate_frame_cmd_buffers(hgAppData* ptState)
+{
+    ptState->tCommandComponents.tCommandBuffers = malloc(ptState->tSwapchainComponents.uSwapchainImageCount * sizeof(VkCommandBuffer));
+
+    VkCommandBufferAllocateInfo tAllocInfo = {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = ptState->tCommandComponents.tCommandPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = ptState->tSwapchainComponents.uSwapchainImageCount
+    };
+    VULKAN_CHECK(vkAllocateCommandBuffers(ptState->tContextComponents.tDevice, &tAllocInfo, ptState->tCommandComponents.tCommandBuffers));
+}
+
+// =============================================================================
+// SWAPCHAIN & RENDER PASS (recreate on window resize)
+// =============================================================================
+
 void
 hg_create_swapchain(hgAppData* ptAppData, VkPresentModeKHR tPreferredPresentMode)
 {
@@ -270,12 +326,10 @@ hg_create_swapchain(hgAppData* ptAppData, VkPresentModeKHR tPreferredPresentMode
     free(pFormats);
 }
 
-// -----------------------------------------------------------------------------
-// Render Pipeline (RenderPass + Pipeline)
-// -----------------------------------------------------------------------------
 void 
 hg_create_render_pass(hgAppData* ptAppData, hgRenderPassConfig* ptConfig)
 {
+    // set clear color from config
     memcpy(ptAppData->tPipelineComponents.afClearColor, &ptConfig->afClearColor, sizeof(float) * 4);
 
     VkAttachmentDescription tColorAttachment = {
@@ -311,7 +365,211 @@ hg_create_render_pass(hgAppData* ptAppData, hgRenderPassConfig* ptConfig)
     VULKAN_CHECK(vkCreateRenderPass(ptAppData->tContextComponents.tDevice, &tRenderPassInfo, NULL, &ptAppData->tPipelineComponents.tRenderPass));
 }
 
+void 
+hg_create_framebuffers(hgAppData* ptAppData) 
+{
+    ptAppData->tPipelineComponents.tFramebuffers = malloc(ptAppData->tSwapchainComponents.uSwapchainImageCount * sizeof(VkFramebuffer));
 
+    for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++) 
+    {
+        VkImageView attachments[] = {ptAppData->tSwapchainComponents.tSwapchainImageViews[i]};
+
+        VkFramebufferCreateInfo tFramebufferInfo = {
+            .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass      = ptAppData->tPipelineComponents.tRenderPass,
+            .attachmentCount = 1,
+            .pAttachments    = attachments,
+            .width           = ptAppData->tSwapchainComponents.tExtent.width,
+            .height          = ptAppData->tSwapchainComponents.tExtent.height,
+            .layers          = 1
+        };
+
+        VULKAN_CHECK(vkCreateFramebuffer(ptAppData->tContextComponents.tDevice, &tFramebufferInfo, NULL, &ptAppData->tPipelineComponents.tFramebuffers[i]));
+    }
+}
+
+void
+hg_recreate_swapchain(hgAppData* ptState)
+{
+    // wait for device to be idle before destroying resources then clean up old resources
+    vkDeviceWaitIdle(ptState->tContextComponents.tDevice);
+    hg_cleanup_swapchain_resources(ptState);
+
+    // get new window dimensions (GLFW handles) && handle minimization (window size is 0)
+    int newWidth = 0, newHeight = 0;
+    glfwGetFramebufferSize(ptState->pWindow, &newWidth, &newHeight);
+    while (newWidth == 0 || newHeight == 0) 
+    {
+        glfwGetFramebufferSize(ptState->pWindow, &newWidth, &newHeight);
+        glfwWaitEvents();
+    }
+
+    // recreate swapchain with new size
+    hg_create_swapchain(ptState, VK_PRESENT_MODE_FIFO_KHR);
+
+    // recreate all swapchain-dependent resources
+    hg_create_framebuffers(ptState);        // framebuffers depend on swapchain images
+    hg_allocate_frame_cmd_buffers(ptState); // command buffers should be recreated
+
+    // update state with new dimensions
+    ptState->width = newWidth;
+    ptState->height = newHeight;
+}
+
+// =============================================================================
+// RESOURCE CREATION
+// =============================================================================
+
+// -------------------------------
+// Buffers
+// -------------------------------
+hgVertexBuffer 
+hg_create_vertex_buffer(hgAppData* ptAppData, void* data, size_t size, size_t stride)
+{
+    hgVertexBuffer tNewBuffer = {0};
+
+    tNewBuffer.szSize = size;
+    tNewBuffer.uVertexCount = size / stride;
+
+    // create staging buffer
+    VkBuffer tStagingBuffer;
+    VkDeviceMemory tStagingMemory;
+    hg_create_buffer(&ptAppData->tContextComponents, (VkDeviceSize)size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &tStagingBuffer, &tStagingMemory);
+
+    // map and copy data
+    void* pMapped;
+    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, 0, size, 0, &pMapped);
+    memcpy(pMapped, data, size);
+    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory);
+
+    // create device local buffer
+    hg_create_buffer(&ptAppData->tContextComponents, (VkDeviceSize)size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &tNewBuffer.tBuffer, &tNewBuffer.tMemory);
+
+    // copy staging to device
+    hg_copy_buffer(&ptAppData->tContextComponents, &ptAppData->tCommandComponents, 
+        tStagingBuffer, tNewBuffer.tBuffer, size);
+
+    // cleanup staging
+    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
+    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, NULL);
+
+    return tNewBuffer;
+}
+
+hgIndexBuffer 
+hg_create_index_buffer(hgAppData* ptAppData, uint16_t* indices, uint32_t count)
+{
+    hgIndexBuffer tNewBuffer = {0};
+
+    size_t szSize = sizeof(uint16_t) * count;
+    tNewBuffer.szSize = szSize;
+    tNewBuffer.uIndexCount = count;
+
+    // create staging buffer
+    VkBuffer tStagingBuffer;
+    VkDeviceMemory tStagingMemory;
+    hg_create_buffer(&ptAppData->tContextComponents, (VkDeviceSize)szSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &tStagingBuffer, &tStagingMemory);
+
+    // map and copy
+    void* pMapped;
+    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, 0, szSize, 0, &pMapped);
+    memcpy(pMapped, indices, szSize);
+    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory);
+
+    // create device buffer
+    hg_create_buffer(&ptAppData->tContextComponents, (VkDeviceSize)szSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &tNewBuffer.tBuffer, &tNewBuffer.tMemory);
+
+    // copy
+    hg_copy_buffer(&ptAppData->tContextComponents, &ptAppData->tCommandComponents, 
+        tStagingBuffer, tNewBuffer.tBuffer, szSize);
+
+    // cleanup staging
+    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
+    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, NULL);
+
+    return tNewBuffer;
+}
+
+// -------------------------------
+// Textures
+// -------------------------------
+unsigned char*
+hg_load_texture_data(const char* pcFileName, int* iWidthOut, int* iHeightOut)
+{
+    int iComponentsInFile = 0;
+    return stbi_load(pcFileName, iWidthOut, iHeightOut, &iComponentsInFile, 4);
+}
+
+hgTexture 
+hg_create_texture(hgAppData* ptAppData, const unsigned char* pucData, int iWidth, int iHeight)
+{
+    hgTexture tTexture = {0};
+    tTexture.iWidth    = iWidth;
+    tTexture.iHeight   = iHeight;
+
+    // create image
+    VkImageCreateInfo tImageInfo = {
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .format        = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent        = {iWidth, iHeight, 1},
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .tiling        = VK_IMAGE_TILING_OPTIMAL,
+        .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    VULKAN_CHECK(vkCreateImage(ptAppData->tContextComponents.tDevice, &tImageInfo, NULL, &tTexture.tImage));
+
+    // allocate memory
+    VkMemoryRequirements tMemRequirements;
+    vkGetImageMemoryRequirements(ptAppData->tContextComponents.tDevice, tTexture.tImage, &tMemRequirements);
+
+    VkMemoryAllocateInfo tAllocInfo = {
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = tMemRequirements.size,
+        .memoryTypeIndex = hg_find_memory_type(&ptAppData->tContextComponents, tMemRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
+    VULKAN_CHECK(vkAllocateMemory(ptAppData->tContextComponents.tDevice, &tAllocInfo, NULL, &tTexture.tMemory));
+    VULKAN_CHECK(vkBindImageMemory(ptAppData->tContextComponents.tDevice, tTexture.tImage, tTexture.tMemory, 0));
+
+    // upload texture data (using staging buffer)
+    hg_upload_to_image(ptAppData, tTexture.tImage, pucData, iWidth, iHeight);
+
+    // create image view
+    VkImageViewCreateInfo tViewInfo = {
+        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image      = tTexture.tImage,
+        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .format     = VK_FORMAT_R8G8B8A8_UNORM,
+        .components = {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY
+        },
+        .subresourceRange   = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+    VULKAN_CHECK(vkCreateImageView(ptAppData->tContextComponents.tDevice, &tViewInfo, NULL, &tTexture.tImageView));
+
+    return tTexture;
+}
+
+// -------------------------------
+// Pipelines
+// -------------------------------
 hgPipeline
 hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
 {
@@ -411,7 +669,7 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
         .blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f}
     };
 
-    // Create pipeline layout using config
+    // create pipeline layout using config
     VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount         = ptConfig->uDescriptorSetLayoutCount,
@@ -422,10 +680,8 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
 
     hgPipeline tPipelineResult = {0};
 
-    VULKAN_CHECK(vkCreatePipelineLayout(ptAppData->tContextComponents.tDevice, 
-                                        &tPipelineLayoutInfo, 
-                                        NULL, 
-                                        &tPipelineResult.tPipelineLayout));
+    VULKAN_CHECK(vkCreatePipelineLayout(ptAppData->tContextComponents.tDevice, &tPipelineLayoutInfo, NULL, 
+            &tPipelineResult.tPipelineLayout));
 
     // create graphics pipeline
     VkGraphicsPipelineCreateInfo tPipelineInfo = {
@@ -456,503 +712,128 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
     return tPipelineResult;
 }
 
-void 
-hg_create_framebuffers(hgAppData* ptAppData) 
+// =============================================================================
+// FRAME RENDERING
+// =============================================================================
+
+// -------------------------------
+// Frame Lifecycle
+// -------------------------------
+uint32_t 
+hg_begin_frame(hgAppData* ptState)
 {
-    ptAppData->tPipelineComponents.tFramebuffers = malloc(ptAppData->tSwapchainComponents.uSwapchainImageCount * sizeof(VkFramebuffer));
+    vkWaitForFences(ptState->tContextComponents.tDevice, 1, &ptState->tSyncComponents.tInFlight, VK_TRUE, UINT64_MAX);
+    vkResetFences(ptState->tContextComponents.tDevice, 1, &ptState->tSyncComponents.tInFlight);
 
-    for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++) 
-    {
-        VkImageView attachments[] = {ptAppData->tSwapchainComponents.tSwapchainImageViews[i]};
+    uint32_t uImageIndex = 0;
+    vkAcquireNextImageKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, UINT64_MAX, 
+        ptState->tSyncComponents.tImageAvailable, VK_NULL_HANDLE, &uImageIndex);
 
-        VkFramebufferCreateInfo tFramebufferInfo = {
-            .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass      = ptAppData->tPipelineComponents.tRenderPass,
-            .attachmentCount = 1,
-            .pAttachments    = attachments,
-            .width           = ptAppData->tSwapchainComponents.tExtent.width,
-            .height          = ptAppData->tSwapchainComponents.tExtent.height,
-            .layers          = 1
-        };
+    // set current frame index
+    ptState->tCommandComponents.uCurrentImageIndex = uImageIndex;
 
-        VULKAN_CHECK(vkCreateFramebuffer(ptAppData->tContextComponents.tDevice, &tFramebufferInfo, NULL, &ptAppData->tPipelineComponents.tFramebuffers[i]));
-    }
+    // get, reset, and begin command buffer
+    VkCommandBuffer tCommandBuffer = hg_get_current_frame_cmd_buffer(ptState);
+    vkResetCommandBuffer(tCommandBuffer, 0);
+
+    VkCommandBufferBeginInfo tBeginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+    };
+    VULKAN_CHECK(vkBeginCommandBuffer(ptState->tCommandComponents.tCommandBuffers[uImageIndex], &tBeginInfo));
+
+    return uImageIndex;
 }
 
-// -----------------------------------------------------------------------------
-// Command Buffer Management
-// -----------------------------------------------------------------------------
 void 
-hg_create_command_pool(hgAppData* ptAppData) 
+hg_end_frame(hgAppData* ptState, uint32_t uImageIndex)
 {
-    VkCommandPoolCreateInfo tPoolInfo = {
-        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = ptAppData->tContextComponents.tGraphicsQueueFamily
-    };
-
-    VULKAN_CHECK(vkCreateCommandPool(ptAppData->tContextComponents.tDevice, &tPoolInfo, NULL, &ptAppData->tCommandComponents.tCommandPool));
-}
-
-// -----------------------------------------------------------------------------
-// Synchronization Objects
-// -----------------------------------------------------------------------------
-void 
-hg_create_sync_objects(hgAppData* ptAppData) 
-{
-    VkSemaphoreCreateInfo tSemaphoreInfo = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-    };
-
-    VkFenceCreateInfo tFenceInfo = {
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .flags = VK_FENCE_CREATE_SIGNALED_BIT
-    };
-
-    VULKAN_CHECK(vkCreateSemaphore(ptAppData->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptAppData->tSyncComponents.tImageAvailable));
-    VULKAN_CHECK(vkCreateSemaphore(ptAppData->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptAppData->tSyncComponents.tRenderFinished));
-    VULKAN_CHECK(vkCreateFence(ptAppData->tContextComponents.tDevice, &tFenceInfo, NULL, &ptAppData->tSyncComponents.tInFlight));
-}
-
-// -----------------------------------------------------------------------------
-// Frame Rendering Loop
-// -----------------------------------------------------------------------------
-void 
-hg_draw_frame(hgAppData* ptAppData) 
-{
-    // wait for previous frame to finish
-    vkWaitForFences(ptAppData->tContextComponents.tDevice, 1, &ptAppData->tSyncComponents.tInFlight, VK_TRUE, UINT64_MAX);
-    vkResetFences(ptAppData->tContextComponents.tDevice, 1, &ptAppData->tSyncComponents.tInFlight);
-
-    // acquire next image
-    uint32_t uImageIndex;
-    vkAcquireNextImageKHR(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchain, UINT64_MAX, 
-                         ptAppData->tSyncComponents.tImageAvailable, VK_NULL_HANDLE, &uImageIndex);
+    // get current command buffer
+    VkCommandBuffer tCommandBuffer = hg_get_current_frame_cmd_buffer(ptState);
+    VULKAN_CHECK(vkEndCommandBuffer(tCommandBuffer));
 
     // submit command buffer
     VkSubmitInfo tSubmitInfo = {
         .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount   = 1,
-        .pWaitSemaphores      = &ptAppData->tSyncComponents.tImageAvailable,
+        .pWaitSemaphores      = &ptState->tSyncComponents.tImageAvailable,
         .pWaitDstStageMask    = (VkPipelineStageFlags[]){VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
         .commandBufferCount   = 1,
-        .pCommandBuffers      = &ptAppData->tCommandComponents.tCommandBuffers[uImageIndex],
+        .pCommandBuffers      = &ptState->tCommandComponents.tCommandBuffers[uImageIndex],
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores    = &ptAppData->tSyncComponents.tRenderFinished
+        .pSignalSemaphores    = &ptState->tSyncComponents.tRenderFinished
     };
 
-    VULKAN_CHECK(vkQueueSubmit(ptAppData->tContextComponents.tGraphicsQueue, 1, &tSubmitInfo, ptAppData->tSyncComponents.tInFlight));
+    VULKAN_CHECK(vkQueueSubmit(ptState->tContextComponents.tGraphicsQueue, 1, &tSubmitInfo, ptState->tSyncComponents.tInFlight));
 
     // present
     VkPresentInfoKHR tPresentInfo = {
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores    = &ptAppData->tSyncComponents.tRenderFinished,
+        .pWaitSemaphores    = &ptState->tSyncComponents.tRenderFinished,
         .swapchainCount     = 1,
-        .pSwapchains        = &ptAppData->tSwapchainComponents.tSwapchain,
+        .pSwapchains        = &ptState->tSwapchainComponents.tSwapchain,
         .pImageIndices      = &uImageIndex
     };
-
-    vkQueuePresentKHR(ptAppData->tContextComponents.tGraphicsQueue, &tPresentInfo);
+    VULKAN_CHECK(vkQueuePresentKHR(ptState->tContextComponents.tGraphicsQueue, &tPresentInfo));
 }
 
-// -----------------------------------------------------------------------------
-// Resource Creation & Management
-// -----------------------------------------------------------------------------
-
 // -------------------------------
-// Buffers & Memory
+// Render Pass
 // -------------------------------
-uint32_t 
-hg_find_memory_type(hgVulkanContext* ptContext, uint32_t uTypeFilter, VkMemoryPropertyFlags tProperties)
+void 
+hg_begin_render_pass(hgAppData* ptState, uint32_t uImageIndex) 
 {
-    VkPhysicalDeviceMemoryProperties tMemProperties;
-    vkGetPhysicalDeviceMemoryProperties(ptContext->tPhysicalDevice, &tMemProperties);
+    // get command buffer
+    VkCommandBuffer tCommandBuffer = hg_get_current_frame_cmd_buffer(ptState);
 
-    for(uint32_t i = 0; i < tMemProperties.memoryTypeCount; i++) 
-    {
-        if((uTypeFilter & (1 << i)) && (tMemProperties.memoryTypes[i].propertyFlags & tProperties) == tProperties)
-        {
-            return i;
-        }
-    }
-    printf("Failed to find suitable memory type!\n");
-    exit(1);
+    // grab clear color from state
+    VkClearValue clearColor = {{{
+        ptState->tPipelineComponents.afClearColor[0],
+        ptState->tPipelineComponents.afClearColor[1],
+        ptState->tPipelineComponents.afClearColor[2],
+        ptState->tPipelineComponents.afClearColor[3]
+    }}};
+
+    // begin render pass
+    VkRenderPassBeginInfo renderPassInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = ptState->tPipelineComponents.tRenderPass,
+        .framebuffer = ptState->tPipelineComponents.tFramebuffers[uImageIndex],
+        .renderArea = {
+            .offset = {0, 0},
+            .extent = ptState->tSwapchainComponents.tExtent
+        },
+        .clearValueCount = 1,
+        .pClearValues = &clearColor
+    };
+    vkCmdBeginRenderPass(tCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 
 void
-hg_create_buffer(hgVulkanContext* ptContext, VkDeviceSize tSize, VkBufferUsageFlags tFlags, VkMemoryPropertyFlags tProperties, VkBuffer* ptBuffer, VkDeviceMemory* pMemory)
+hg_end_render_pass(hgAppData* ptState)
 {
-    // create buffer
-    VkBufferCreateInfo tBufferCreateInfo = {
-        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size        = tSize,
-        .usage       = tFlags,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
-    };
-    VULKAN_CHECK(vkCreateBuffer(ptContext->tDevice, &tBufferCreateInfo, NULL, ptBuffer));
-
-    // get memory requirements
-    VkMemoryRequirements tMemRequirements;
-    vkGetBufferMemoryRequirements(ptContext->tDevice, *ptBuffer, &tMemRequirements);
-
-    // find suitable memory
-    uint32_t tMemTypeIndex = hg_find_memory_type(ptContext, tMemRequirements.memoryTypeBits, tProperties);
-
-    // allocate and bind memory
-    VkMemoryAllocateInfo tMemAllocInfo = {
-        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize  = tMemRequirements.size,
-        .memoryTypeIndex = tMemTypeIndex
-    };
-    VULKAN_CHECK(vkAllocateMemory(ptContext->tDevice, &tMemAllocInfo, NULL, pMemory));
-    VULKAN_CHECK(vkBindBufferMemory(ptContext->tDevice, *ptBuffer, *pMemory, 0));
-}
-
-void hg_copy_buffer(hgVulkanContext* ptContext, hgCommandResources* ptCommands, VkBuffer tSrcBuffer, VkBuffer tDstBuffer, VkDeviceSize tSize)
-{
-    // create a temporary command buffer for the copy
-    VkCommandBufferAllocateInfo tBufferAllocInfo = {
-        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandPool        = ptCommands->tCommandPool,
-        .commandBufferCount = 1
-    };
-
-    VkCommandBuffer tCommandBuffer;
-    VULKAN_CHECK(vkAllocateCommandBuffers(ptContext->tDevice, &tBufferAllocInfo, &tCommandBuffer));
-
-    // Record copy command
-    VkCommandBufferBeginInfo tBeginCommandBufferInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    };
-    VULKAN_CHECK(vkBeginCommandBuffer(tCommandBuffer, &tBeginCommandBufferInfo));
-
-    VkBufferCopy tCopyRegion = {
-        .srcOffset = 0,
-        .dstOffset = 0,
-        .size      = tSize
-    };
-    vkCmdCopyBuffer(tCommandBuffer, tSrcBuffer, tDstBuffer, 1, &tCopyRegion);
-
-    VULKAN_CHECK(vkEndCommandBuffer(tCommandBuffer));
-
-    // Submit and wait for completion
-    VkSubmitInfo submitInfo = {
-        .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers    = &tCommandBuffer
-    };
-    VULKAN_CHECK(vkQueueSubmit(ptContext->tGraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-    VULKAN_CHECK(vkQueueWaitIdle(ptContext->tGraphicsQueue));  // wait for copy to finish
-
-    vkFreeCommandBuffers(ptContext->tDevice, ptCommands->tCommandPool, 1, &tCommandBuffer);
+    vkCmdEndRenderPass(ptState->tCommandComponents.tCommandBuffers[ptState->tCommandComponents.uCurrentImageIndex]);
 }
 
 // -------------------------------
-// Vertex/Index Buffer Creation
+// Bind State
 // -------------------------------
-hgVertexBuffer 
-hg_create_vertex_buffer(hgAppData* ptAppData, void* data, size_t size, size_t stride)
-{
-    hgVertexBuffer tNewBuffer = {0};
+// TODO: Implement hg_cmd_bind_pipeline, hg_cmd_bind_vertex_buffer, etc.
 
-    tNewBuffer.szSize = size;
-    tNewBuffer.uVertexCount = size / stride;
+// -------------------------------
+// Draw Commands
+// -------------------------------
+// TODO: Implement hg_cmd_draw, hg_cmd_draw_indexed, etc.
 
-    // create staging buffer
-    VkBuffer tStagingBuffer;
-    VkDeviceMemory tStagingMemory;
-    hg_create_buffer(&ptAppData->tContextComponents, 
-        (VkDeviceSize)size, 
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-        &tStagingBuffer, 
-        &tStagingMemory);
+// -------------------------------
+// Convenience Wrappers
+// -------------------------------
+// TODO: Implement hg_draw_mesh
 
-    // Map and copy data
-    void* pMapped;
-    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, 0, size, 0, &pMapped);
-    memcpy(pMapped, data, size);
-    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory);
+// =============================================================================
+// CLEANUP
+// =============================================================================
 
-    // create device local buffer
-    hg_create_buffer(&ptAppData->tContextComponents, 
-        (VkDeviceSize)size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &tNewBuffer.tBuffer,
-        &tNewBuffer.tMemory);
-
-    // copy staging to device
-    hg_copy_buffer(&ptAppData->tContextComponents, &ptAppData->tCommandComponents, 
-        tStagingBuffer, tNewBuffer.tBuffer, size);
-
-    // cleanup staging
-    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
-    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, NULL);
-
-    return tNewBuffer;
-}
-
-hgIndexBuffer 
-hg_create_index_buffer(hgAppData* ptAppData, uint16_t* indices, uint32_t count)
-{
-    hgIndexBuffer tNewBuffer = {0};
-
-    size_t szSize = sizeof(uint16_t) * count;
-    tNewBuffer.szSize = szSize;
-    tNewBuffer.uIndexCount = count;
-
-    // Create staging buffer
-    VkBuffer tStagingBuffer;
-    VkDeviceMemory tStagingMemory;
-    hg_create_buffer(&ptAppData->tContextComponents, 
-        (VkDeviceSize)szSize, 
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-        &tStagingBuffer, 
-        &tStagingMemory);
-
-    // Map and copy
-    void* pMapped;
-    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, 0, szSize, 0, &pMapped);
-    memcpy(pMapped, indices, szSize);
-    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory);
-
-    // Create device buffer
-    hg_create_buffer(&ptAppData->tContextComponents, 
-        (VkDeviceSize)szSize, 
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &tNewBuffer.tBuffer,      // Fill in our struct
-        &tNewBuffer.tMemory);
-
-    // Copy
-    hg_copy_buffer(&ptAppData->tContextComponents, &ptAppData->tCommandComponents, 
-        tStagingBuffer, tNewBuffer.tBuffer, szSize);
-
-    // Cleanup staging
-    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
-    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, NULL);
-
-    return tNewBuffer;
-}
-
-// -----------------------------------------------------------------------------
-// Descriptor Management
-// -----------------------------------------------------------------------------
-void hg_create_descriptor_set(hgAppData* ptAppData)
-{
-
-};
-
-// -----------------------------------------------------------------------------
-// Textures
-// -----------------------------------------------------------------------------
-
-// CPU texture loading (uses STB)
-unsigned char*
-hg_load_texture_data(const char* pcFileName, int* iWidthOut, int* iHeightOut)
-{
-    int iComponentsInFile = 0;
-    return stbi_load(pcFileName, iWidthOut, iHeightOut, &iComponentsInFile, 4);
-}
-
-// GPU texture creation and upload
-hgTexture 
-hg_create_texture(hgAppData* ptAppData, const unsigned char* pucData, int iWidth, int iHeight)
-{
-    hgTexture tTexture = {0};
-    tTexture.iWidth    = iWidth;
-    tTexture.iHeight   = iHeight;
-
-    // create image
-    VkImageCreateInfo tImageInfo = {
-        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType     = VK_IMAGE_TYPE_2D,
-        .format        = VK_FORMAT_R8G8B8A8_UNORM,
-        .extent        = {iWidth, iHeight, 1},
-        .mipLevels     = 1,
-        .arrayLayers   = 1,
-        .samples       = VK_SAMPLE_COUNT_1_BIT,
-        .tiling        = VK_IMAGE_TILING_OPTIMAL,
-        .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    };
-    VULKAN_CHECK(vkCreateImage(ptAppData->tContextComponents.tDevice, &tImageInfo, NULL, &tTexture.tImage));
-
-    // allocate memory
-    VkMemoryRequirements tMemRequirements;
-    vkGetImageMemoryRequirements(ptAppData->tContextComponents.tDevice, tTexture.tImage, &tMemRequirements);
-
-    VkMemoryAllocateInfo tAllocInfo = {
-        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize  = tMemRequirements.size,
-        .memoryTypeIndex = hg_find_memory_type(&ptAppData->tContextComponents, 
-                                              tMemRequirements.memoryTypeBits,
-                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-    };
-    VULKAN_CHECK(vkAllocateMemory(ptAppData->tContextComponents.tDevice, &tAllocInfo, NULL, &tTexture.tMemory));
-    VULKAN_CHECK(vkBindImageMemory(ptAppData->tContextComponents.tDevice, tTexture.tImage, tTexture.tMemory, 0));
-
-    // upload texture data (using staging buffer)
-    hg_upload_to_image(ptAppData, tTexture.tImage, pucData, iWidth, iHeight);
-
-    // create image view
-    VkImageViewCreateInfo tViewInfo = {
-        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image      = tTexture.tImage,
-        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-        .format     = VK_FORMAT_R8G8B8A8_UNORM,
-        .components = {
-            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .a = VK_COMPONENT_SWIZZLE_IDENTITY
-        },
-        .subresourceRange   = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1
-        }
-    };
-    VULKAN_CHECK(vkCreateImageView(ptAppData->tContextComponents.tDevice, &tViewInfo, NULL, &tTexture.tImageView));
-
-    return tTexture;
-}
-
-
-
-// internal upload helper
-void 
-hg_upload_to_image(hgAppData* ptAppData, VkImage tImage, const unsigned char* pData, int iWidth, int iHeight)
-{
-    VkDeviceSize imageSize = iWidth * iHeight * 4; // RGBA8
-
-    // create staging buffer
-    VkBuffer       tStagingBuffer;
-    VkDeviceMemory tStagingBufferMemory;
-    hg_create_buffer(&ptAppData->tContextComponents, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &tStagingBuffer, &tStagingBufferMemory);
-
-    // copy data to staging buffer
-    void* pMapped;
-    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory, 0, imageSize, 0, &pMapped);
-    memcpy(pMapped, pData, imageSize);
-    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory);
-
-    // record copy commands
-    VkCommandBuffer tCmdBuffer = hg_begin_single_time_commands(ptAppData);
-
-    // transition to transfer dst
-    VkImageSubresourceRange tSubResRan = {
-        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-        .baseMipLevel   = 0,
-        .levelCount     = 1,
-        .baseArrayLayer = 0,
-        .layerCount     = 1
-    };
-
-    hg_transition_image_layout(tCmdBuffer, tImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-        tSubResRan, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-    // copy buffer to image
-    VkBufferImageCopy tRegion = {
-        .bufferOffset       = 0,
-        .bufferRowLength    = 0,
-        .bufferImageHeight  = 0,
-        .imageSubresource   = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel       = 0,
-            .baseArrayLayer = 0,
-            .layerCount     = 1
-        },
-        .imageOffset        = {0, 0, 0},
-        .imageExtent        = {iWidth, iHeight, 1}
-    };
-    vkCmdCopyBufferToImage(tCmdBuffer, tStagingBuffer, tImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &tRegion);
-
-    // transition to shader read
-    hg_transition_image_layout(tCmdBuffer, tImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tSubResRan, VK_PIPELINE_STAGE_TRANSFER_BIT, 
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-
-    hg_end_single_time_commands(ptAppData, tCmdBuffer);
-
-    // cleanup staging
-    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
-    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory, NULL);
-}
-
-// -----------------------------------------------------------------------------
-// Shader Management
-// -----------------------------------------------------------------------------
-VkShaderModule 
-hg_create_shader_module(hgAppData* ptAppData, const char* pcFilename) 
-{
-    // TODO: clean up paths
-    const char* apcPossiblePaths[] = {
-        pcFilename,                         // absolute path
-        "../out/shaders/vert.spv",          // relative from src folder
-        "../../out/shaders/vert.spv",       // relative if running from project root
-        "out/shaders/vert.spv",             // relative if running from project root
-        NULL
-    };
-
-    FILE* pFile = NULL;
-    const char* pcFoundPath = NULL;
-
-    for(int i = 0; apcPossiblePaths[i] != NULL; i++) 
-    {
-        pFile = fopen(apcPossiblePaths[i], "rb");
-        if(pFile) 
-        {
-            pcFoundPath = apcPossiblePaths[i];
-            printf("Found shader at: %s\n", pcFoundPath);
-            break;
-        }
-    }
-
-    if(!pFile) 
-    {
-        printf("Failed to open shader file: %s\n", pcFilename);
-        printf("Tried paths:\n");
-        for(int i = 0; apcPossiblePaths[i] != NULL; i++) 
-        {
-            printf("  %s\n", apcPossiblePaths[i]);
-        }
-        return VK_NULL_HANDLE;
-    }
-
-    fseek(pFile, 0, SEEK_END);
-    long lSize = ftell(pFile);
-    rewind(pFile);
-
-    uint32_t* puCode = malloc(lSize);
-    fread(puCode, lSize, 1, pFile);
-    fclose(pFile);
-
-    VkShaderModuleCreateInfo tCreateInfo = {
-        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = lSize,
-        .pCode    = puCode
-    };
-
-    VkShaderModule tShaderModule;
-    VULKAN_CHECK(vkCreateShaderModule(ptAppData->tContextComponents.tDevice, &tCreateInfo, NULL, &tShaderModule));
-
-    free(puCode);
-    return tShaderModule;
-}
-
-// -----------------------------------------------------------------------------
-// Cleanup & Resource Destruction
-// -----------------------------------------------------------------------------
 void 
 hg_cleanup(hgAppData* ptAppData) 
 {
@@ -1056,6 +937,47 @@ hg_cleanup(hgAppData* ptAppData)
     }
 }
 
+void
+hg_cleanup_swapchain_resources(hgAppData* ptState) 
+{
+    // free command buffers
+    if (ptState->tCommandComponents.tCommandBuffers) {
+        vkFreeCommandBuffers(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, 
+            ptState->tSwapchainComponents.uSwapchainImageCount, ptState->tCommandComponents.tCommandBuffers);
+        free(ptState->tCommandComponents.tCommandBuffers);
+        ptState->tCommandComponents.tCommandBuffers = NULL;
+    }
+
+    // destroy framebuffers
+    if (ptState->tPipelineComponents.tFramebuffers) 
+    {
+        for (uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
+        {
+            vkDestroyFramebuffer(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tFramebuffers[i], NULL);
+        }
+        free(ptState->tPipelineComponents.tFramebuffers);
+        ptState->tPipelineComponents.tFramebuffers = NULL;
+    }
+
+    // destroy image views
+    if (ptState->tSwapchainComponents.tSwapchainImageViews) 
+    {
+        for (uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
+        {
+            vkDestroyImageView(ptState->tContextComponents.tDevice,ptState->tSwapchainComponents.tSwapchainImageViews[i], NULL);
+        }
+        free(ptState->tSwapchainComponents.tSwapchainImageViews);
+        ptState->tSwapchainComponents.tSwapchainImageViews = NULL;
+    }
+
+    // destroy old swapchain
+    if (ptState->tSwapchainComponents.tSwapchain != VK_NULL_HANDLE) 
+    {
+        vkDestroySwapchainKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, NULL);
+        ptState->tSwapchainComponents.tSwapchain = VK_NULL_HANDLE;
+    }
+}
+
 void 
 hg_destroy_pipeline(hgAppData* ptAppData, hgPipeline* tPipeline)
 {
@@ -1064,7 +986,6 @@ hg_destroy_pipeline(hgAppData* ptAppData, hgPipeline* tPipeline)
 
 };
 
-// Texture cleanup
 void 
 hg_destroy_texture(hgAppData* ptAppData, hgTexture* tTexture)
 {
@@ -1075,11 +996,103 @@ hg_destroy_texture(hgAppData* ptAppData, hgTexture* tTexture)
     memset(tTexture, 0, sizeof(hgTexture));
 }
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
+// =============================================================================
+// INTERNAL HELPERS
+// =============================================================================
 
-// Single-time command buffer helpers
+// -------------------------------
+// Memory & Buffer Helpers
+// -------------------------------
+uint32_t 
+hg_find_memory_type(hgVulkanContext* ptContext, uint32_t uTypeFilter, VkMemoryPropertyFlags tProperties)
+{
+    VkPhysicalDeviceMemoryProperties tMemProperties;
+    vkGetPhysicalDeviceMemoryProperties(ptContext->tPhysicalDevice, &tMemProperties);
+
+    for(uint32_t i = 0; i < tMemProperties.memoryTypeCount; i++) 
+    {
+        if((uTypeFilter & (1 << i)) && (tMemProperties.memoryTypes[i].propertyFlags & tProperties) == tProperties)
+        {
+            return i;
+        }
+    }
+    printf("Failed to find suitable memory type!\n");
+    exit(1);
+}
+
+void
+hg_create_buffer(hgVulkanContext* ptContext, VkDeviceSize tSize, VkBufferUsageFlags tFlags, VkMemoryPropertyFlags tProperties, VkBuffer* ptBuffer, VkDeviceMemory* pMemory)
+{
+    // create buffer
+    VkBufferCreateInfo tBufferCreateInfo = {
+        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size        = tSize,
+        .usage       = tFlags,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+    VULKAN_CHECK(vkCreateBuffer(ptContext->tDevice, &tBufferCreateInfo, NULL, ptBuffer));
+
+    // get memory requirements
+    VkMemoryRequirements tMemRequirements;
+    vkGetBufferMemoryRequirements(ptContext->tDevice, *ptBuffer, &tMemRequirements);
+
+    // find suitable memory
+    uint32_t tMemTypeIndex = hg_find_memory_type(ptContext, tMemRequirements.memoryTypeBits, tProperties);
+
+    // allocate and bind memory
+    VkMemoryAllocateInfo tMemAllocInfo = {
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = tMemRequirements.size,
+        .memoryTypeIndex = tMemTypeIndex
+    };
+    VULKAN_CHECK(vkAllocateMemory(ptContext->tDevice, &tMemAllocInfo, NULL, pMemory));
+    VULKAN_CHECK(vkBindBufferMemory(ptContext->tDevice, *ptBuffer, *pMemory, 0));
+}
+
+void hg_copy_buffer(hgVulkanContext* ptContext, hgCommandResources* ptCommands, VkBuffer tSrcBuffer, VkBuffer tDstBuffer, VkDeviceSize tSize)
+{
+    // create a temporary command buffer for the copy
+    VkCommandBufferAllocateInfo tBufferAllocInfo = {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandPool        = ptCommands->tCommandPool,
+        .commandBufferCount = 1
+    };
+
+    VkCommandBuffer tCommandBuffer;
+    VULKAN_CHECK(vkAllocateCommandBuffers(ptContext->tDevice, &tBufferAllocInfo, &tCommandBuffer));
+
+    // Record copy command
+    VkCommandBufferBeginInfo tBeginCommandBufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    VULKAN_CHECK(vkBeginCommandBuffer(tCommandBuffer, &tBeginCommandBufferInfo));
+
+    VkBufferCopy tCopyRegion = {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size      = tSize
+    };
+    vkCmdCopyBuffer(tCommandBuffer, tSrcBuffer, tDstBuffer, 1, &tCopyRegion);
+
+    VULKAN_CHECK(vkEndCommandBuffer(tCommandBuffer));
+
+    // submit and wait for completion
+    VkSubmitInfo submitInfo = {
+        .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers    = &tCommandBuffer
+    };
+    VULKAN_CHECK(vkQueueSubmit(ptContext->tGraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+    VULKAN_CHECK(vkQueueWaitIdle(ptContext->tGraphicsQueue));  // wait for copy to finish
+
+    vkFreeCommandBuffers(ptContext->tDevice, ptCommands->tCommandPool, 1, &tCommandBuffer);
+}
+
+// -------------------------------
+// Single Time Commands
+// -------------------------------
 VkCommandBuffer 
 hg_begin_single_time_commands(hgAppData* ptAppData) 
 {
@@ -1119,7 +1132,9 @@ hg_end_single_time_commands(hgAppData* ptAppData, VkCommandBuffer tCommandBuffer
     vkFreeCommandBuffers(ptAppData->tContextComponents.tDevice, ptAppData->tCommandComponents.tCommandPool, 1, &tCommandBuffer);
 }
 
-// Image layout transition helper
+// -------------------------------
+// Image Operations
+// -------------------------------
 void 
 hg_transition_image_layout(VkCommandBuffer tCommandBuffer, VkImage tImage, VkImageLayout tOldLayout, 
     VkImageLayout tNewLayout, VkImageSubresourceRange tSubresourceRange, VkPipelineStageFlags tSrcStageMask, 
@@ -1203,3 +1218,140 @@ hg_transition_image_layout(VkCommandBuffer tCommandBuffer, VkImage tImage, VkIma
 
     vkCmdPipelineBarrier(tCommandBuffer, tSrcStageMask, tDstStageMask, 0, 0, NULL, 0, NULL, 1, &tBarrier);
 }
+
+void 
+hg_upload_to_image(hgAppData* ptAppData, VkImage tImage, const unsigned char* pData, int iWidth, int iHeight)
+{
+    VkDeviceSize imageSize = iWidth * iHeight * 4; // RGBA8
+
+    // create staging buffer
+    VkBuffer       tStagingBuffer;
+    VkDeviceMemory tStagingBufferMemory;
+    hg_create_buffer(&ptAppData->tContextComponents, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &tStagingBuffer, &tStagingBufferMemory);
+
+    // copy data to staging buffer
+    void* pMapped;
+    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory, 0, imageSize, 0, &pMapped);
+    memcpy(pMapped, pData, imageSize);
+    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory);
+
+    // record copy commands
+    VkCommandBuffer tCmdBuffer = hg_begin_single_time_commands(ptAppData);
+
+    // transition to transfer dst
+    VkImageSubresourceRange tSubResRan = {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1
+    };
+
+    hg_transition_image_layout(tCmdBuffer, tImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+        tSubResRan, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    // copy buffer to image
+    VkBufferImageCopy tRegion = {
+        .bufferOffset       = 0,
+        .bufferRowLength    = 0,
+        .bufferImageHeight  = 0,
+        .imageSubresource   = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel       = 0,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        },
+        .imageOffset        = {0, 0, 0},
+        .imageExtent        = {iWidth, iHeight, 1}
+    };
+    vkCmdCopyBufferToImage(tCmdBuffer, tStagingBuffer, tImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &tRegion);
+
+    // transition to shader read
+    hg_transition_image_layout(tCmdBuffer, tImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        tSubResRan, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+    hg_end_single_time_commands(ptAppData, tCmdBuffer);
+
+    // cleanup staging
+    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
+    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory, NULL);
+}
+
+// -------------------------------
+// shader Loading
+// -------------------------------
+VkShaderModule 
+hg_create_shader_module(hgAppData* ptAppData, const char* pcFilename) 
+{
+    // TODO: clean up paths
+    const char* apcPossiblePaths[] = {
+        pcFilename,                         // absolute path
+        "../out/shaders/vert.spv",          // relative from src folder
+        "../../out/shaders/vert.spv",       // relative if running from project root
+        "out/shaders/vert.spv",             // relative if running from project root
+        NULL
+    };
+
+    FILE* pFile = NULL;
+    const char* pcFoundPath = NULL;
+
+    for(int i = 0; apcPossiblePaths[i] != NULL; i++) 
+    {
+        pFile = fopen(apcPossiblePaths[i], "rb");
+        if(pFile) 
+        {
+            pcFoundPath = apcPossiblePaths[i];
+            printf("Found shader at: %s\n", pcFoundPath);
+            break;
+        }
+    }
+
+    if(!pFile) 
+    {
+        printf("Failed to open shader file: %s\n", pcFilename);
+        printf("Tried paths:\n");
+        for(int i = 0; apcPossiblePaths[i] != NULL; i++) 
+        {
+            printf("  %s\n", apcPossiblePaths[i]);
+        }
+        return VK_NULL_HANDLE;
+    }
+
+    fseek(pFile, 0, SEEK_END);
+    long lSize = ftell(pFile);
+    rewind(pFile);
+
+    uint32_t* puCode = malloc(lSize);
+    fread(puCode, lSize, 1, pFile);
+    fclose(pFile);
+
+    VkShaderModuleCreateInfo tCreateInfo = {
+        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = lSize,
+        .pCode    = puCode
+    };
+
+    VkShaderModule tShaderModule;
+    VULKAN_CHECK(vkCreateShaderModule(ptAppData->tContextComponents.tDevice, &tCreateInfo, NULL, &tShaderModule));
+
+    free(puCode);
+    return tShaderModule;
+}
+
+// -------------------------------
+// command Buffer Access
+// -------------------------------
+VkCommandBuffer 
+hg_get_current_frame_cmd_buffer(hgAppData* ptState) 
+{
+    return ptState->tCommandComponents.tCommandBuffers[ptState->tCommandComponents.uCurrentImageIndex];
+}
+
+// -------------------------------
+// descriptor Management (stub)
+// -------------------------------
+void hg_create_descriptor_set(hgAppData* ptAppData)
+{
+    // TODO: Implement descriptor set creation
+};

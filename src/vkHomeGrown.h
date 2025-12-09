@@ -11,6 +11,21 @@
 #include <stdbool.h>
 
 // =============================================================================
+// TABLE OF CONTENTS
+// =============================================================================
+/*
+    -> [SECTION] MACROS
+    -> [SECTION] CORE TYPES
+    -> [SECTION] CONFIGURATION STRUCTS
+    -> [SECTION] INTERNAL STATE
+    -> [SECTION] INITIALIZATION & SETUP
+    -> [SECTION] SWAPCHAIN & RENDER PASS
+    -> [SECTION] RESOURCE CREATION
+    -> [SECTION] FRAME RENDERING
+    -> [SECTION] CLEANUP
+*/
+
+// =============================================================================
 // MACROS
 // =============================================================================
 
@@ -20,7 +35,7 @@
 }
 
 // =============================================================================
-// CORE TYPES - Used throughout the API
+// CORE TYPES
 // =============================================================================
 
 
@@ -63,7 +78,7 @@ typedef struct _hgPipeline
 } hgPipeline;
 
 // =============================================================================
-// CONFIGURATION STRUCTS - Used to configure creation functions
+// CONFIGURATION STRUCTS
 // =============================================================================
 
 typedef struct _hgRenderPassConfig
@@ -153,7 +168,8 @@ typedef struct _hgFrameSync
 } hgFrameSync;
 
 // main application state
-typedef struct _hgAppData{
+typedef struct _hgAppData
+{
     // Window
     GLFWwindow* pWindow;
     int         width;
@@ -178,53 +194,52 @@ void hg_create_logical_device(hgAppData* ptState);
 void hg_create_command_pool(hgAppData* ptState);
 void hg_create_sync_objects(hgAppData* ptState);
 
+// specific to frame command buffers only -> used on swapchain recreation as well
+void hg_allocate_frame_cmd_buffers(hgAppData* ptState);
+
 // =============================================================================
-// SWAPCHAIN & RENDER PASS (Recreate on window resize)
+// SWAPCHAIN & RENDER PASS (recreate on window resize)
 // =============================================================================
 
 void hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR preferredPresentMode);
 void hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* config);
 void hg_create_framebuffers(hgAppData* ptState);
-// TODO: void hg_recreate_swapchain(hgAppData* ptState);
+void hg_recreate_swapchain(hgAppData* ptState);
 
 // =============================================================================
-// RESOURCE CREATION (User manages returned handles)
+// RESOURCE CREATION
 // =============================================================================
 
-// Buffers
+// buffers
 hgVertexBuffer hg_create_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride);
 hgIndexBuffer  hg_create_index_buffer(hgAppData* ptState, uint16_t* indices, uint32_t count);
 // TODO: void hg_destroy_vertex_buffer(hgAppData* ptState, hgVertexBuffer* buffer);
 // TODO: void hg_destroy_index_buffer(hgAppData* ptState, hgIndexBuffer* buffer);
 
-// Textures
+// textures
 unsigned char* hg_load_texture_data(const char* filename, int* widthOut, int* heightOut);
 hgTexture      hg_create_texture(hgAppData* ptState, const unsigned char* data, int width, int height);
 void           hg_destroy_texture(hgAppData* ptState, hgTexture* texture);
 
-// Pipelines
+// pipelines
 hgPipeline hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* config);
 void       hg_destroy_pipeline(hgAppData* ptState, hgPipeline* pipeline);
 
 // descriptors (user manages these directly for now)
-// TODO: Add descriptor helper functions if needed
+// TODO: add descriptor helper functions if needed
 
 // =============================================================================
-// FRAME RENDERING (Call every frame)
+// FRAME RENDERING
 // =============================================================================
 
 // frame lifecycle
 uint32_t hg_begin_frame(hgAppData* ptState);
-// wait for fence, acquire swapchain image, reset and begin command buffer -> returns: swapchain image index to use for this frame
-void hg_end_frame(hgAppData* ptState, uint32_t uImageIndex);
-// end command buffer, submit to queue with semaphores, present to screen
+void     hg_end_frame(hgAppData* ptState, uint32_t uImageIndex);
 
 
 // Render pass
 void hg_begin_render_pass(hgAppData* ptState, uint32_t uImageIndex);
-// begin render pass, set viewport/scissor, apply clear values
 void hg_end_render_pass(hgAppData* ptState);
-// end render pass (must be called before end_frame)
 
 
 // bind state (must be called between begin/end render pass)
@@ -244,7 +259,7 @@ void hg_cmd_draw(hgAppData* ptState, uint32_t uVertexCount, uint32_t uFirstVerte
 void hg_cmd_draw_indexed(hgAppData* ptState, uint32_t uIndexCount, uint32_t uFirstIndex, int32_t iVertexOffset);
 // draw indexed geometry using currently bound vertex and index buffers
 
-// convenience wrappers (optional - combines bind + draw)
+// convenience wrappers -> not sure if this is worth it or not yet
 void hg_draw_mesh(hgAppData* ptState, hgVertexBuffer* tVertexBuffer, hgIndexBuffer* tIndexBuffer, uint32_t uIndexCount);
 // convenience function - binds vertex/index buffers and draws in one call
 
@@ -254,27 +269,7 @@ void hg_draw_mesh(hgAppData* ptState, hgVertexBuffer* tVertexBuffer, hgIndexBuff
 
 void hg_cleanup(hgAppData* ptState);
 
-// =============================================================================
-// INTERNAL/ADVANCED - Most users won't need these
-// =============================================================================
+void hg_cleanup_swapchain_resources(hgAppData* ptState); // for swapchain rebuilding on window resize
 
-// low-level buffer operations
-uint32_t hg_find_memory_type(hgVulkanContext* context, uint32_t typeFilter, VkMemoryPropertyFlags properties);
-void     hg_create_buffer(hgVulkanContext* context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* memory);
-void     hg_copy_buffer(hgVulkanContext* context, hgCommandResources* commands, VkBuffer src, VkBuffer dst, VkDeviceSize size);
-
-// one-time command helpers
-VkCommandBuffer hg_begin_single_time_commands(hgAppData* ptState);
-void            hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer cmdBuffer);
-
-// image operations
-void hg_transition_image_layout(VkCommandBuffer cmdBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange subresourceRange, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage);
-void hg_upload_to_image(hgAppData* ptState, VkImage image, const unsigned char* data, int width, int height);
-
-// shader loading
-VkShaderModule hg_create_shader_module(hgAppData* ptState, const char* filename);
-
-// command buffer access (for advanced users)
-VkCommandBuffer hg_get_current_command_buffer(hgAppData* ptState);
 
 #endif // VKHOMEGROWN_H

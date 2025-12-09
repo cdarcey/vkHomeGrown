@@ -175,7 +175,7 @@ int main(void)
         .ptAttributeDescriptions   = tTestVertAttribs,
         .uAttributeCount           = 3,
         .bBlendEnable              = VK_FALSE,
-        .tCullMode                 = VK_CULL_MODE_NONE,
+        .tCullMode                 = VK_CULL_MODE_FRONT_BIT,
         .tFrontFace                = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .tTopology                 = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .ptDescriptorSetLayouts    = &tDescriptorSetLayout,
@@ -185,78 +185,52 @@ int main(void)
     };
     hgPipeline tTestPipeline = hg_create_graphics_pipeline(&tState, &tTestConfig);
 
-    // command buffer creation and recording
-    tState.tCommandComponents.tCommandBuffers = malloc(tState.tSwapchainComponents.uSwapchainImageCount * sizeof(VkCommandBuffer));
-
-    VkCommandBufferAllocateInfo tAllocInfo = {
-        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool        = tState.tCommandComponents.tCommandPool,
-        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = tState.tSwapchainComponents.uSwapchainImageCount
-    };
-    VULKAN_CHECK(vkAllocateCommandBuffers(tState.tContextComponents.tDevice, &tAllocInfo, tState.tCommandComponents.tCommandBuffers));
-
-    // record command buffers
-    for(uint32_t i = 0; i < tState.tSwapchainComponents.uSwapchainImageCount; i++) 
-    {
-        VkCommandBufferBeginInfo tBeginInfo = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-        };
-        VULKAN_CHECK(vkBeginCommandBuffer(tState.tCommandComponents.tCommandBuffers[i], &tBeginInfo));
-
-        VkClearValue tClearColor = {
-            .color = {{1.0f, 1.0f, 1.0f, 1.0f}}  // RGBA format
-        };
-
-        VkRenderPassBeginInfo tRenderPassInfo = {
-            .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .renderPass  = tState.tPipelineComponents.tRenderPass,
-            .framebuffer = tState.tPipelineComponents.tFramebuffers[i],
-            .renderArea  = {
-                .offset  = {0, 0},
-                .extent  = tState.tSwapchainComponents.tExtent
-            },
-            .clearValueCount = 1,
-            .pClearValues    = &tClearColor
-        };
-        vkCmdBeginRenderPass(tState.tCommandComponents.tCommandBuffers[i], &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
-
-        if(tDescriptorSet != NULL || tDescriptorSet != VK_NULL_HANDLE) 
-        {
-            vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                tTestPipeline.tPipelineLayout, 0, 1, &tDescriptorSet, 0, NULL);
-        }
-
-        // bind vertex buffer
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[i], 0, 1, &tTestVertBuffer.tBuffer, offsets);
-        vkCmdBindIndexBuffer(tState.tCommandComponents.tCommandBuffers[i], tTestIndBuffer.tBuffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdDrawIndexed(tState.tCommandComponents.tCommandBuffers[i], tTestIndBuffer.uIndexCount, 1, 0, 0, 0);
-
-        vkCmdEndRenderPass(tState.tCommandComponents.tCommandBuffers[i]);
-        VULKAN_CHECK(vkEndCommandBuffer(tState.tCommandComponents.tCommandBuffers[i]));
-    }
     hg_create_sync_objects(&tState);
 
+    // command buffer creation and recording
+    hg_allocate_frame_cmd_buffers(&tState);
 
     // main loop
     while (!glfwWindowShouldClose(window)) 
     {
-        glfwPollEvents();  // handle window events
+        glfwPollEvents();
 
-        // check for window resize
         int newWidth, newHeight;
         glfwGetFramebufferSize(window, &newWidth, &newHeight);
-        if (newWidth != tState.width || newHeight != tState.height) 
+
+        // handle resize or minimization (width and height are 0)
+        if (newWidth != tState.width || newHeight != tState.height || newWidth == 0 || newHeight == 0) 
         {
-            tState.width = newWidth;
-            tState.height = newHeight;
-            // TODO: Handle swapchain recreation for resize
+            // wait for device to finish current work
+            vkDeviceWaitIdle(tState.tContextComponents.tDevice);
+
+            // recreate swapchain and dependent resources
+            hg_recreate_swapchain(&tState);
+            continue; // skip this frame
         }
 
-        // render frame
-        hg_draw_frame(&tState);
+        // begin frame
+        uint32_t uImageIndex = hg_begin_frame(&tState);
+        hg_begin_render_pass(&tState, uImageIndex);
+
+
+        // scene/ frame building -> testing stuff in here for now
+        vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
+        if(tDescriptorSet != VK_NULL_HANDLE) 
+        {
+            vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                tTestPipeline.tPipelineLayout, 0, 1, &tDescriptorSet, 0, NULL);
+        }
+        // bind vertex buffer
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[uImageIndex], 0, 1, &tTestVertBuffer.tBuffer, offsets);
+        vkCmdBindIndexBuffer(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.tBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.uIndexCount, 1, 0, 0, 0);
+
+        // end frame 
+        hg_end_render_pass(&tState);
+        hg_end_frame(&tState, tState.tCommandComponents.uCurrentImageIndex);
+
     }
 
 
