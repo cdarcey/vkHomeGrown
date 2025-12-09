@@ -1,3 +1,62 @@
+# vkHomeGrown
+
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![Language](https://img.shields.io/badge/Language-C-blue.svg)
+![Vulkan](https://img.shields.io/badge/API-Vulkan-orange.svg)
+![Status](https://img.shields.io/badge/Status-Active-green.svg)
+
+A lightweight, educational Vulkan rendering framework written in C. Designed for learning graphics programming while providing practical, reusable abstractions over the Vulkan API.
+
+## 📑 Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [API Reference](#api-reference)
+- [Examples](#examples)
+- [Limitations](#limitations)
+- [Acknowledgments](#acknowledgments)
+
+## 📋 Overview
+
+**vkHomeGrown** is not a full game engine, but a minimalistic rendering layer that helps you understand Vulkan from the ground up. It provides sensible abstractions for common rendering tasks while keeping the Vulkan concepts visible and understandable.
+
+Perfect for:
+- Learning Vulkan without drowning in boilerplate
+- Building small graphics demos and prototypes
+- Understanding modern GPU APIs
+- Educational graphics programming projects
+
+## ✨ Features
+
+- **Minimalistic API**     - Just enough abstraction to be useful, not enough to hide Vulkan's concepts
+- **Educational Design**   - Clear separation of concerns, well-commented code (at least I tried)
+- **Modern C**             - Clean, readable code following consistent patterns
+- **GLFW Integration**     - Cross-platform window management
+- **Resource Management**  - Vertex buffers, index buffers, textures, pipelines
+- **Swapchain Management** - Automatic recreation on window resize
+- **Descriptor Support**   - Texture sampling and uniform buffers
+- **Build System**         - Simple .bat setup for easy compilation
+
+## 🚀 Getting Started
+
+### Prerequisites
+- C compiler (GCC, Clang, or MSVC)
+- Vulkan SDK
+- GLFW 3.x
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/username/vkHomeGrown.git
+cd vkHomeGrown
+
+```
+
+### Quick Start Example
+
+```c
 
 
 #include "vkHomeGrown.h"
@@ -242,3 +301,92 @@ int main(void)
 
     return 0;
 }
+```
+
+## 📁 Project Structure
+
+```
+📁 vkHomeGrown/
+├── 📁 src/
+│   ├── vkHomeGrown.h    # Main public API header
+│   ├── vkHomeGrown.c    # Implementation
+│   ├── build.bat        # build script
+│   └── main.c           # Example application
+├── 📁 shaders/          # SPIR-V shader files
+│   ├── vert.spv
+│   └── frag.spv
+├── 📁 textures/         # Example texture assets
+├── 📄 README.md         # This file
+└── 📄 LICENSE           # MIT License
+```
+
+## 🎓 Learning Resources
+
+This project is designed to be educational. Key concepts covered:
+
+1. **Vulkan Initialization** - Instance, device, queues
+2. **Swapchain Management** - Images, image views, presentation
+3. **Pipeline Creation** - Shaders, vertex input, rasterization state
+4. **Memory Management** - Buffers, images, memory allocation
+5. **Command Recording** - Command buffers, render passes, synchronization
+6. **Resource Binding** - Descriptors, vertex/index buffers
+
+## 🔧 API Reference
+
+### Core Types
+- `hgAppData` - Main application state container
+- `hgVertexBuffer`, `hgIndexBuffer` - Geometry buffers
+- `hgTexture` - Image texture with Vulkan resources
+- `hgPipeline` - Graphics pipeline state
+
+### Initialization
+- `hg_create_instance()` - Create Vulkan instance
+- `hg_create_surface()` - Create window surface
+- `hg_pick_physical_device()` - Select GPU
+- `hg_create_logical_device()` - Create logical device
+
+### Resource Creation
+- `hg_create_vertex_buffer()` - Upload vertex data to GPU
+- `hg_create_index_buffer()` - Upload index data to GPU
+- `hg_create_texture()` - Create and upload texture
+- `hg_create_graphics_pipeline()` - Create graphics pipeline
+
+### Frame Rendering
+- `hg_begin_frame()` - Start frame, acquire swapchain image
+- `hg_end_frame()` - Submit commands and present
+- `hg_begin_render_pass()` - Start rendering to framebuffer
+- `hg_end_render_pass()` - End rendering pass
+
+## 🎯 Example Projects
+
+coming soon...
+
+
+## ⚠️ Limitations
+
+This is an educational project with some intentional limitations:
+
+- Single queue family (graphics + presentation)
+- No depth buffering (coming soon)
+- Basic synchronization (single frame in flight)
+- Limited error handling for clarity
+- No advanced features (compute, ray tracing)
+
+
+## 🙏 Acknowledgments
+
+- The Vulkan Working Group and Khronos Group
+- GLFW developers for excellent windowing library
+- All the Vulkan tutorials and documentation that made this possible
+- The open source graphics programming community
+
+
+## 🔗 Related Projects
+
+- [Vulkan Tutorial](https://vulkan-tutorial.com/) - Great learning resource
+- [GLFW](https://www.glfw.org/) - Window and input management
+- [stb_image](https://github.com/nothings/stb) - Image loading
+- [Dear ImGui](https://github.com/ocornut/imgui) - Immediate mode GUI
+
+
+**vkHomeGrown** - Grow your Vulkan knowledge from the ground up!
