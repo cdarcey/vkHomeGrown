@@ -38,7 +38,7 @@
 // Core Vulkan Context Initialization
 // -----------------------------------------------------------------------------
 void
-hg_create_instance(hgAppData* ptState, const char* pcAppName, uint32_t uAppVersion, bool bEnableValidation)
+hg_create_instance(hgAppData* ptAppData, const char* pcAppName, uint32_t uAppVersion, bool bEnableValidation)
 {
     VkApplicationInfo tAppInfo = {
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -68,69 +68,69 @@ hg_create_instance(hgAppData* ptState, const char* pcAppName, uint32_t uAppVersi
         tCreateInfo.ppEnabledLayerNames = validationLayers;
     }
 
-    VULKAN_CHECK(vkCreateInstance(&tCreateInfo, NULL, &ptState->tContextComponents.tInstance));
+    VULKAN_CHECK(vkCreateInstance(&tCreateInfo, NULL, &ptAppData->tContextComponents.tInstance));
 }
 
 void
-hg_create_surface(hgAppData* ptState) 
+hg_create_surface(hgAppData* ptAppData) 
 {
     // GLFW handles platform-specific surface creation
     VULKAN_CHECK(glfwCreateWindowSurface(
-        ptState->tContextComponents.tInstance,
-        ptState->pWindow,
+        ptAppData->tContextComponents.tInstance,
+        ptAppData->pWindow,
         NULL,
-        &ptState->tSwapchainComponents.tSurface
+        &ptAppData->tSwapchainComponents.tSurface
     ));
 }
 
 void 
-hg_pick_physical_device(hgAppData* ptState) 
+hg_pick_physical_device(hgAppData* ptAppData) 
 {
     uint32_t uDeviceCount = 0;
-    vkEnumeratePhysicalDevices(ptState->tContextComponents.tInstance, &uDeviceCount, NULL);
+    vkEnumeratePhysicalDevices(ptAppData->tContextComponents.tInstance, &uDeviceCount, NULL);
     assert(uDeviceCount > 0);
 
     VkPhysicalDevice* ptDevices = malloc(uDeviceCount * sizeof(VkPhysicalDevice));
-    vkEnumeratePhysicalDevices(ptState->tContextComponents.tInstance, &uDeviceCount, ptDevices);
+    vkEnumeratePhysicalDevices(ptAppData->tContextComponents.tInstance, &uDeviceCount, ptDevices);
 
     // just pick the first gpu
-    ptState->tContextComponents.tPhysicalDevice = ptDevices[0];
+    ptAppData->tContextComponents.tPhysicalDevice = ptDevices[0];
 
     free(ptDevices);
 }
 
 void 
-hg_create_logical_device(hgAppData* ptState) 
+hg_create_logical_device(hgAppData* ptAppData) 
 {
     // find queue family that supports graphics and presentation
     uint32_t uQueueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(ptState->tContextComponents.tPhysicalDevice, &uQueueFamilyCount, NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(ptAppData->tContextComponents.tPhysicalDevice, &uQueueFamilyCount, NULL);
     VkQueueFamilyProperties* pQueueFamilies = malloc(uQueueFamilyCount * sizeof(VkQueueFamilyProperties));
-    vkGetPhysicalDeviceQueueFamilyProperties(ptState->tContextComponents.tPhysicalDevice, &uQueueFamilyCount, pQueueFamilies);
+    vkGetPhysicalDeviceQueueFamilyProperties(ptAppData->tContextComponents.tPhysicalDevice, &uQueueFamilyCount, pQueueFamilies);
 
     // find graphics queue family
-    ptState->tContextComponents.tGraphicsQueueFamily = UINT32_MAX;
+    ptAppData->tContextComponents.tGraphicsQueueFamily = UINT32_MAX;
     for(uint32_t i = 0; i < uQueueFamilyCount; i++) 
     {
         if(pQueueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) 
         {
             VkBool32 bPresentSupport = VK_FALSE;
-            vkGetPhysicalDeviceSurfaceSupportKHR(ptState->tContextComponents.tPhysicalDevice, i, ptState->tSwapchainComponents.tSurface, &bPresentSupport);
+            vkGetPhysicalDeviceSurfaceSupportKHR(ptAppData->tContextComponents.tPhysicalDevice, i, ptAppData->tSwapchainComponents.tSurface, &bPresentSupport);
             if(bPresentSupport) 
             {
-                ptState->tContextComponents.tGraphicsQueueFamily = i;
+                ptAppData->tContextComponents.tGraphicsQueueFamily = i;
                 break;
             }
         }
     }
-    assert(ptState->tContextComponents.tGraphicsQueueFamily != UINT32_MAX);
+    assert(ptAppData->tContextComponents.tGraphicsQueueFamily != UINT32_MAX);
 
     free(pQueueFamilies);
 
     float fQueuePriority = 1.0f;
     VkDeviceQueueCreateInfo tQueueCreateInfo = {
         .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = ptState->tContextComponents.tGraphicsQueueFamily,
+        .queueFamilyIndex = ptAppData->tContextComponents.tGraphicsQueueFamily,
         .queueCount       = 1,
         .pQueuePriorities = &fQueuePriority
     };
@@ -144,33 +144,33 @@ hg_create_logical_device(hgAppData* ptState)
         .ppEnabledExtensionNames = deviceExtensions
     };
 
-    VULKAN_CHECK(vkCreateDevice(ptState->tContextComponents.tPhysicalDevice, &tDeviceCreateInfo, NULL, &ptState->tContextComponents.tDevice));
-    vkGetDeviceQueue(ptState->tContextComponents.tDevice, ptState->tContextComponents.tGraphicsQueueFamily, 0, &ptState->tContextComponents.tGraphicsQueue);
+    VULKAN_CHECK(vkCreateDevice(ptAppData->tContextComponents.tPhysicalDevice, &tDeviceCreateInfo, NULL, &ptAppData->tContextComponents.tDevice));
+    vkGetDeviceQueue(ptAppData->tContextComponents.tDevice, ptAppData->tContextComponents.tGraphicsQueueFamily, 0, &ptAppData->tContextComponents.tGraphicsQueue);
 }
 
 // -----------------------------------------------------------------------------
 // Swapchain Management
 // -----------------------------------------------------------------------------
 void
-hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
+hg_create_swapchain(hgAppData* ptAppData, VkPresentModeKHR tPreferredPresentMode)
 {
     // get surface capabilities
     VkSurfaceCapabilitiesKHR tCapabilities;
-    VULKAN_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ptState->tContextComponents.tPhysicalDevice, ptState->tSwapchainComponents.tSurface, &tCapabilities));
+    VULKAN_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ptAppData->tContextComponents.tPhysicalDevice, ptAppData->tSwapchainComponents.tSurface, &tCapabilities));
 
     // get surface formats
     uint32_t uFormatCount;
-    VULKAN_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(ptState->tContextComponents.tPhysicalDevice, ptState->tSwapchainComponents.tSurface, &uFormatCount, NULL));
+    VULKAN_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(ptAppData->tContextComponents.tPhysicalDevice, ptAppData->tSwapchainComponents.tSurface, &uFormatCount, NULL));
     VkSurfaceFormatKHR* pFormats = malloc(uFormatCount * sizeof(VkSurfaceFormatKHR));
-    VULKAN_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(ptState->tContextComponents.tPhysicalDevice, ptState->tSwapchainComponents.tSurface, &uFormatCount, pFormats));
+    VULKAN_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(ptAppData->tContextComponents.tPhysicalDevice, ptAppData->tSwapchainComponents.tSurface, &uFormatCount, pFormats));
 
     // choose surface format (prefer B8G8R8A8_UNORM with sRGB)
-    ptState->tSwapchainComponents.tFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    ptAppData->tSwapchainComponents.tFormat = VK_FORMAT_B8G8R8A8_UNORM;
     for(uint32_t i = 0; i < uFormatCount; i++) 
     {
         if(pFormats[i].format == VK_FORMAT_B8G8R8A8_UNORM && pFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) 
         {
-            ptState->tSwapchainComponents.tFormat = pFormats[i].format;
+            ptAppData->tSwapchainComponents.tFormat = pFormats[i].format;
             break;
         }
     }
@@ -178,18 +178,18 @@ hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
     // choose swap extent
     if(tCapabilities.currentExtent.width != UINT32_MAX) 
     {
-        ptState->tSwapchainComponents.tExtent = tCapabilities.currentExtent;
+        ptAppData->tSwapchainComponents.tExtent = tCapabilities.currentExtent;
     } 
     else 
     {
-        VkExtent2D tActualExtent = {ptState->width, ptState->height};
+        VkExtent2D tActualExtent = {ptAppData->width, ptAppData->height};
         tActualExtent.width = (tActualExtent.width < tCapabilities.minImageExtent.width) ? 
             tCapabilities.minImageExtent.width : (tActualExtent.width > tCapabilities.maxImageExtent.width) ? 
             tCapabilities.maxImageExtent.width : tActualExtent.width;
         tActualExtent.height = (tActualExtent.height < tCapabilities.minImageExtent.height) ? 
             tCapabilities.minImageExtent.height : (tActualExtent.height > tCapabilities.maxImageExtent.height) ? 
             tCapabilities.maxImageExtent.height : tActualExtent.height;
-        ptState->tSwapchainComponents.tExtent = tActualExtent;
+        ptAppData->tSwapchainComponents.tExtent = tActualExtent;
     }
 
     // choose image count
@@ -201,12 +201,12 @@ hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
 
     // see if requested mode is available
     uint32_t uPresentModeCount;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(ptState->tContextComponents.tPhysicalDevice, 
-        ptState->tSwapchainComponents.tSurface, &uPresentModeCount, NULL);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(ptAppData->tContextComponents.tPhysicalDevice, 
+        ptAppData->tSwapchainComponents.tSurface, &uPresentModeCount, NULL);
 
     VkPresentModeKHR pPresentModes[8];  // 8 is more than enough
-    vkGetPhysicalDeviceSurfacePresentModesKHR(ptState->tContextComponents.tPhysicalDevice, 
-        ptState->tSwapchainComponents.tSurface, &uPresentModeCount, pPresentModes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(ptAppData->tContextComponents.tPhysicalDevice, 
+        ptAppData->tSwapchainComponents.tSurface, &uPresentModeCount, pPresentModes);
 
     // FIFO as the default
     VkPresentModeKHR tSelectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -222,11 +222,11 @@ hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
     // create swapchain
     VkSwapchainCreateInfoKHR tCreateInfo = {
         .sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .surface          = ptState->tSwapchainComponents.tSurface,
+        .surface          = ptAppData->tSwapchainComponents.tSurface,
         .minImageCount    = uImageCount,
-        .imageFormat      = ptState->tSwapchainComponents.tFormat,
+        .imageFormat      = ptAppData->tSwapchainComponents.tFormat,
         .imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        .imageExtent      = ptState->tSwapchainComponents.tExtent,
+        .imageExtent      = ptAppData->tSwapchainComponents.tExtent,
         .imageArrayLayers = 1,
         .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -235,22 +235,22 @@ hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
         .presentMode      = tSelectedPresentMode,
         .clipped          = VK_TRUE
     };
-    VULKAN_CHECK(vkCreateSwapchainKHR(ptState->tContextComponents.tDevice, &tCreateInfo, NULL, &ptState->tSwapchainComponents.tSwapchain));
+    VULKAN_CHECK(vkCreateSwapchainKHR(ptAppData->tContextComponents.tDevice, &tCreateInfo, NULL, &ptAppData->tSwapchainComponents.tSwapchain));
 
     // get swapchain images
-    VULKAN_CHECK(vkGetSwapchainImagesKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, &ptState->tSwapchainComponents.uSwapchainImageCount, NULL));
-    ptState->tSwapchainComponents.tSwapchainImages = malloc(ptState->tSwapchainComponents.uSwapchainImageCount * sizeof(VkImage));
-    VULKAN_CHECK(vkGetSwapchainImagesKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, &ptState->tSwapchainComponents.uSwapchainImageCount, ptState->tSwapchainComponents.tSwapchainImages));
+    VULKAN_CHECK(vkGetSwapchainImagesKHR(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchain, &ptAppData->tSwapchainComponents.uSwapchainImageCount, NULL));
+    ptAppData->tSwapchainComponents.tSwapchainImages = malloc(ptAppData->tSwapchainComponents.uSwapchainImageCount * sizeof(VkImage));
+    VULKAN_CHECK(vkGetSwapchainImagesKHR(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchain, &ptAppData->tSwapchainComponents.uSwapchainImageCount, ptAppData->tSwapchainComponents.tSwapchainImages));
 
     // create image views
-    ptState->tSwapchainComponents.tSwapchainImageViews = malloc(ptState->tSwapchainComponents.uSwapchainImageCount * sizeof(VkImageView));
-    for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
+    ptAppData->tSwapchainComponents.tSwapchainImageViews = malloc(ptAppData->tSwapchainComponents.uSwapchainImageCount * sizeof(VkImageView));
+    for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++) 
     {
         VkImageViewCreateInfo tViewCreateInfo = {
             .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image      = ptState->tSwapchainComponents.tSwapchainImages[i],
+            .image      = ptAppData->tSwapchainComponents.tSwapchainImages[i],
             .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-            .format     = ptState->tSwapchainComponents.tFormat,
+            .format     = ptAppData->tSwapchainComponents.tFormat,
             .components = {
                 .r = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .g = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -265,7 +265,7 @@ hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
                 .layerCount     = 1
             }
         };
-        VULKAN_CHECK(vkCreateImageView(ptState->tContextComponents.tDevice, &tViewCreateInfo, NULL, &ptState->tSwapchainComponents.tSwapchainImageViews[i]));
+        VULKAN_CHECK(vkCreateImageView(ptAppData->tContextComponents.tDevice, &tViewCreateInfo, NULL, &ptAppData->tSwapchainComponents.tSwapchainImageViews[i]));
     }
     free(pFormats);
 }
@@ -274,15 +274,15 @@ hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR tPreferredPresentMode)
 // Render Pipeline (RenderPass + Pipeline)
 // -----------------------------------------------------------------------------
 void 
-hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* tConfig)
+hg_create_render_pass(hgAppData* ptAppData, hgRenderPassConfig* ptConfig)
 {
-    memcpy(ptState->afClearColor, &tConfig->afClearColor, sizeof(float) * 4);
+    memcpy(ptAppData->tPipelineComponents.afClearColor, &ptConfig->afClearColor, sizeof(float) * 4);
 
     VkAttachmentDescription tColorAttachment = {
-        .format         = ptState->tSwapchainComponents.tFormat,
+        .format         = ptAppData->tSwapchainComponents.tFormat,
         .samples        = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp         = tConfig->tLoadOp,
-        .storeOp        = tConfig->tStoreOp,
+        .loadOp         = ptConfig->tLoadOp,
+        .storeOp        = ptConfig->tStoreOp,
         .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -308,16 +308,16 @@ hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* tConfig)
         .pSubpasses      = &tSubpass
     };
 
-    VULKAN_CHECK(vkCreateRenderPass(ptState->tContextComponents.tDevice, &tRenderPassInfo, NULL, &ptState->tPipelineComponents.tRenderPass));
+    VULKAN_CHECK(vkCreateRenderPass(ptAppData->tContextComponents.tDevice, &tRenderPassInfo, NULL, &ptAppData->tPipelineComponents.tRenderPass));
 }
 
 
 hgPipeline
-hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* tConfig)
+hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
 {
     // create shader modules
-    VkShaderModule tVertShaderModule = hg_create_shader_module(ptState, tConfig->pcVertexShaderPath);
-    VkShaderModule tFragShaderModule = hg_create_shader_module(ptState, tConfig->pcFragmentShaderPath);
+    VkShaderModule tVertShaderModule = hg_create_shader_module(ptAppData, ptConfig->pcVertexShaderPath);
+    VkShaderModule tFragShaderModule = hg_create_shader_module(ptAppData, ptConfig->pcFragmentShaderPath);
 
     VkPipelineShaderStageCreateInfo tVertShaderStageInfo = {
         .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -337,36 +337,36 @@ hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* tConfig)
     // vertex input state using config
     VkVertexInputBindingDescription tBindingDescription = {
         .binding   = 0,
-        .stride    = tConfig->uVertexStride,
+        .stride    = ptConfig->uVertexStride,
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
     };
 
     VkPipelineVertexInputStateCreateInfo tVertexInputInfo = {
         .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount   = (tConfig->uVertexStride > 0) ? 1 : 0,
-        .pVertexBindingDescriptions      = (tConfig->uVertexStride > 0) ? &tBindingDescription : NULL,
-        .vertexAttributeDescriptionCount = tConfig->uAttributeCount,
-        .pVertexAttributeDescriptions    = tConfig->ptAttributeDescriptions
+        .vertexBindingDescriptionCount   = (ptConfig->uVertexStride > 0) ? 1 : 0,
+        .pVertexBindingDescriptions      = (ptConfig->uVertexStride > 0) ? &tBindingDescription : NULL,
+        .vertexAttributeDescriptionCount = ptConfig->uAttributeCount,
+        .pVertexAttributeDescriptions    = ptConfig->ptAttributeDescriptions
     };
 
     VkPipelineInputAssemblyStateCreateInfo tInputAssembly = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology               = tConfig->tTopology,
+        .topology               = ptConfig->tTopology,
         .primitiveRestartEnable = VK_FALSE
     };
 
     VkViewport tViewport = {
         .x        = 0.0f,
         .y        = 0.0f,
-        .width    = (float)ptState->tSwapchainComponents.tExtent.width,
-        .height   = (float)ptState->tSwapchainComponents.tExtent.height,
+        .width    = (float)ptAppData->tSwapchainComponents.tExtent.width,
+        .height   = (float)ptAppData->tSwapchainComponents.tExtent.height,
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
 
     VkRect2D tScissor = {
         .offset = {0, 0},
-        .extent = ptState->tSwapchainComponents.tExtent
+        .extent = ptAppData->tSwapchainComponents.tExtent
     };
 
     VkPipelineViewportStateCreateInfo tViewportState = {
@@ -383,8 +383,8 @@ hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* tConfig)
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode             = VK_POLYGON_MODE_FILL,
         .lineWidth               = 1.0f,
-        .cullMode                = tConfig->tCullMode,
-        .frontFace               = tConfig->tFrontFace,
+        .cullMode                = ptConfig->tCullMode,
+        .frontFace               = ptConfig->tFrontFace,
         .depthBiasEnable         = VK_FALSE
     };
 
@@ -399,7 +399,7 @@ hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* tConfig)
                           VK_COLOR_COMPONENT_G_BIT | 
                           VK_COLOR_COMPONENT_B_BIT | 
                           VK_COLOR_COMPONENT_A_BIT,
-        .blendEnable    = tConfig->bBlendEnable
+        .blendEnable    = ptConfig->bBlendEnable
     };
 
     VkPipelineColorBlendStateCreateInfo tColorBlending = {
@@ -414,15 +414,15 @@ hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* tConfig)
     // Create pipeline layout using config
     VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount         = tConfig->uDescriptorSetLayoutCount,
-        .pSetLayouts            = tConfig->ptDescriptorSetLayouts,
-        .pushConstantRangeCount = tConfig->uPushConstantRangeCount,
-        .pPushConstantRanges    = tConfig->ptPushConstantRanges
+        .setLayoutCount         = ptConfig->uDescriptorSetLayoutCount,
+        .pSetLayouts            = ptConfig->ptDescriptorSetLayouts,
+        .pushConstantRangeCount = ptConfig->uPushConstantRangeCount,
+        .pPushConstantRanges    = ptConfig->ptPushConstantRanges
     };
 
     hgPipeline tPipelineResult = {0};
 
-    VULKAN_CHECK(vkCreatePipelineLayout(ptState->tContextComponents.tDevice, 
+    VULKAN_CHECK(vkCreatePipelineLayout(ptAppData->tContextComponents.tDevice, 
                                         &tPipelineLayoutInfo, 
                                         NULL, 
                                         &tPipelineResult.tPipelineLayout));
@@ -440,42 +440,42 @@ hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* tConfig)
         .pColorBlendState    = &tColorBlending,
         .pDepthStencilState  = NULL, // TODO: do we want this in the future?
         .layout              = tPipelineResult.tPipelineLayout,
-        .renderPass          = ptState->tPipelineComponents.tRenderPass,
+        .renderPass          = ptAppData->tPipelineComponents.tRenderPass,
         .subpass             = 0,
         .basePipelineHandle  = VK_NULL_HANDLE,
         .basePipelineIndex   = -1
     };
 
-    VULKAN_CHECK(vkCreateGraphicsPipelines(ptState->tContextComponents.tDevice, 
+    VULKAN_CHECK(vkCreateGraphicsPipelines(ptAppData->tContextComponents.tDevice, 
             VK_NULL_HANDLE, 1, &tPipelineInfo, NULL, &tPipelineResult.tPipeline));
 
     // cleanup shader modules
-    vkDestroyShaderModule(ptState->tContextComponents.tDevice, tVertShaderModule, NULL);
-    vkDestroyShaderModule(ptState->tContextComponents.tDevice, tFragShaderModule, NULL);
+    vkDestroyShaderModule(ptAppData->tContextComponents.tDevice, tVertShaderModule, NULL);
+    vkDestroyShaderModule(ptAppData->tContextComponents.tDevice, tFragShaderModule, NULL);
 
     return tPipelineResult;
 }
 
 void 
-hg_create_framebuffers(hgAppData* ptState) 
+hg_create_framebuffers(hgAppData* ptAppData) 
 {
-    ptState->tPipelineComponents.tFramebuffers = malloc(ptState->tSwapchainComponents.uSwapchainImageCount * sizeof(VkFramebuffer));
+    ptAppData->tPipelineComponents.tFramebuffers = malloc(ptAppData->tSwapchainComponents.uSwapchainImageCount * sizeof(VkFramebuffer));
 
-    for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
+    for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++) 
     {
-        VkImageView attachments[] = {ptState->tSwapchainComponents.tSwapchainImageViews[i]};
+        VkImageView attachments[] = {ptAppData->tSwapchainComponents.tSwapchainImageViews[i]};
 
         VkFramebufferCreateInfo tFramebufferInfo = {
             .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass      = ptState->tPipelineComponents.tRenderPass,
+            .renderPass      = ptAppData->tPipelineComponents.tRenderPass,
             .attachmentCount = 1,
             .pAttachments    = attachments,
-            .width           = ptState->tSwapchainComponents.tExtent.width,
-            .height          = ptState->tSwapchainComponents.tExtent.height,
+            .width           = ptAppData->tSwapchainComponents.tExtent.width,
+            .height          = ptAppData->tSwapchainComponents.tExtent.height,
             .layers          = 1
         };
 
-        VULKAN_CHECK(vkCreateFramebuffer(ptState->tContextComponents.tDevice, &tFramebufferInfo, NULL, &ptState->tPipelineComponents.tFramebuffers[i]));
+        VULKAN_CHECK(vkCreateFramebuffer(ptAppData->tContextComponents.tDevice, &tFramebufferInfo, NULL, &ptAppData->tPipelineComponents.tFramebuffers[i]));
     }
 }
 
@@ -483,22 +483,22 @@ hg_create_framebuffers(hgAppData* ptState)
 // Command Buffer Management
 // -----------------------------------------------------------------------------
 void 
-hg_create_command_pool(hgAppData* ptState) 
+hg_create_command_pool(hgAppData* ptAppData) 
 {
     VkCommandPoolCreateInfo tPoolInfo = {
         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = ptState->tContextComponents.tGraphicsQueueFamily
+        .queueFamilyIndex = ptAppData->tContextComponents.tGraphicsQueueFamily
     };
 
-    VULKAN_CHECK(vkCreateCommandPool(ptState->tContextComponents.tDevice, &tPoolInfo, NULL, &ptState->tCommandComponents.tCommandPool));
+    VULKAN_CHECK(vkCreateCommandPool(ptAppData->tContextComponents.tDevice, &tPoolInfo, NULL, &ptAppData->tCommandComponents.tCommandPool));
 }
 
 // -----------------------------------------------------------------------------
 // Synchronization Objects
 // -----------------------------------------------------------------------------
 void 
-hg_create_sync_objects(hgAppData* ptState) 
+hg_create_sync_objects(hgAppData* ptAppData) 
 {
     VkSemaphoreCreateInfo tSemaphoreInfo = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
@@ -509,51 +509,51 @@ hg_create_sync_objects(hgAppData* ptState)
         .flags = VK_FENCE_CREATE_SIGNALED_BIT
     };
 
-    VULKAN_CHECK(vkCreateSemaphore(ptState->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptState->tSyncComponents.tImageAvailable));
-    VULKAN_CHECK(vkCreateSemaphore(ptState->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptState->tSyncComponents.tRenderFinished));
-    VULKAN_CHECK(vkCreateFence(ptState->tContextComponents.tDevice, &tFenceInfo, NULL, &ptState->tSyncComponents.tInFlight));
+    VULKAN_CHECK(vkCreateSemaphore(ptAppData->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptAppData->tSyncComponents.tImageAvailable));
+    VULKAN_CHECK(vkCreateSemaphore(ptAppData->tContextComponents.tDevice, &tSemaphoreInfo, NULL, &ptAppData->tSyncComponents.tRenderFinished));
+    VULKAN_CHECK(vkCreateFence(ptAppData->tContextComponents.tDevice, &tFenceInfo, NULL, &ptAppData->tSyncComponents.tInFlight));
 }
 
 // -----------------------------------------------------------------------------
 // Frame Rendering Loop
 // -----------------------------------------------------------------------------
 void 
-hg_draw_frame(hgAppData* ptState) 
+hg_draw_frame(hgAppData* ptAppData) 
 {
     // wait for previous frame to finish
-    vkWaitForFences(ptState->tContextComponents.tDevice, 1, &ptState->tSyncComponents.tInFlight, VK_TRUE, UINT64_MAX);
-    vkResetFences(ptState->tContextComponents.tDevice, 1, &ptState->tSyncComponents.tInFlight);
+    vkWaitForFences(ptAppData->tContextComponents.tDevice, 1, &ptAppData->tSyncComponents.tInFlight, VK_TRUE, UINT64_MAX);
+    vkResetFences(ptAppData->tContextComponents.tDevice, 1, &ptAppData->tSyncComponents.tInFlight);
 
     // acquire next image
     uint32_t uImageIndex;
-    vkAcquireNextImageKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, UINT64_MAX, 
-                         ptState->tSyncComponents.tImageAvailable, VK_NULL_HANDLE, &uImageIndex);
+    vkAcquireNextImageKHR(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchain, UINT64_MAX, 
+                         ptAppData->tSyncComponents.tImageAvailable, VK_NULL_HANDLE, &uImageIndex);
 
     // submit command buffer
     VkSubmitInfo tSubmitInfo = {
         .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount   = 1,
-        .pWaitSemaphores      = &ptState->tSyncComponents.tImageAvailable,
+        .pWaitSemaphores      = &ptAppData->tSyncComponents.tImageAvailable,
         .pWaitDstStageMask    = (VkPipelineStageFlags[]){VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
         .commandBufferCount   = 1,
-        .pCommandBuffers      = &ptState->tCommandComponents.tCommandBuffers[uImageIndex],
+        .pCommandBuffers      = &ptAppData->tCommandComponents.tCommandBuffers[uImageIndex],
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores    = &ptState->tSyncComponents.tRenderFinished
+        .pSignalSemaphores    = &ptAppData->tSyncComponents.tRenderFinished
     };
 
-    VULKAN_CHECK(vkQueueSubmit(ptState->tContextComponents.tGraphicsQueue, 1, &tSubmitInfo, ptState->tSyncComponents.tInFlight));
+    VULKAN_CHECK(vkQueueSubmit(ptAppData->tContextComponents.tGraphicsQueue, 1, &tSubmitInfo, ptAppData->tSyncComponents.tInFlight));
 
     // present
     VkPresentInfoKHR tPresentInfo = {
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores    = &ptState->tSyncComponents.tRenderFinished,
+        .pWaitSemaphores    = &ptAppData->tSyncComponents.tRenderFinished,
         .swapchainCount     = 1,
-        .pSwapchains        = &ptState->tSwapchainComponents.tSwapchain,
+        .pSwapchains        = &ptAppData->tSwapchainComponents.tSwapchain,
         .pImageIndices      = &uImageIndex
     };
 
-    vkQueuePresentKHR(ptState->tContextComponents.tGraphicsQueue, &tPresentInfo);
+    vkQueuePresentKHR(ptAppData->tContextComponents.tGraphicsQueue, &tPresentInfo);
 }
 
 // -----------------------------------------------------------------------------
@@ -564,10 +564,10 @@ hg_draw_frame(hgAppData* ptState)
 // Buffers & Memory
 // -------------------------------
 uint32_t 
-hg_find_memory_type(hgVulkanContext* ptContextComponents, uint32_t uTypeFilter, VkMemoryPropertyFlags tProperties)
+hg_find_memory_type(hgVulkanContext* ptContext, uint32_t uTypeFilter, VkMemoryPropertyFlags tProperties)
 {
     VkPhysicalDeviceMemoryProperties tMemProperties;
-    vkGetPhysicalDeviceMemoryProperties(ptContextComponents->tPhysicalDevice, &tMemProperties);
+    vkGetPhysicalDeviceMemoryProperties(ptContext->tPhysicalDevice, &tMemProperties);
 
     for(uint32_t i = 0; i < tMemProperties.memoryTypeCount; i++) 
     {
@@ -581,7 +581,7 @@ hg_find_memory_type(hgVulkanContext* ptContextComponents, uint32_t uTypeFilter, 
 }
 
 void
-hg_create_buffer(hgVulkanContext* ptContextComponents, VkDeviceSize tSize, VkBufferUsageFlags tFlags, VkMemoryPropertyFlags tProperties, VkBuffer* ptBuffer, VkDeviceMemory* pMemory)
+hg_create_buffer(hgVulkanContext* ptContext, VkDeviceSize tSize, VkBufferUsageFlags tFlags, VkMemoryPropertyFlags tProperties, VkBuffer* ptBuffer, VkDeviceMemory* pMemory)
 {
     // create buffer
     VkBufferCreateInfo tBufferCreateInfo = {
@@ -590,14 +590,14 @@ hg_create_buffer(hgVulkanContext* ptContextComponents, VkDeviceSize tSize, VkBuf
         .usage       = tFlags,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE
     };
-    VULKAN_CHECK(vkCreateBuffer(ptContextComponents->tDevice, &tBufferCreateInfo, NULL, ptBuffer));
+    VULKAN_CHECK(vkCreateBuffer(ptContext->tDevice, &tBufferCreateInfo, NULL, ptBuffer));
 
     // get memory requirements
     VkMemoryRequirements tMemRequirements;
-    vkGetBufferMemoryRequirements(ptContextComponents->tDevice, *ptBuffer, &tMemRequirements);
+    vkGetBufferMemoryRequirements(ptContext->tDevice, *ptBuffer, &tMemRequirements);
 
     // find suitable memory
-    uint32_t tMemTypeIndex = hg_find_memory_type(ptContextComponents, tMemRequirements.memoryTypeBits, tProperties);
+    uint32_t tMemTypeIndex = hg_find_memory_type(ptContext, tMemRequirements.memoryTypeBits, tProperties);
 
     // allocate and bind memory
     VkMemoryAllocateInfo tMemAllocInfo = {
@@ -605,22 +605,22 @@ hg_create_buffer(hgVulkanContext* ptContextComponents, VkDeviceSize tSize, VkBuf
         .allocationSize  = tMemRequirements.size,
         .memoryTypeIndex = tMemTypeIndex
     };
-    VULKAN_CHECK(vkAllocateMemory(ptContextComponents->tDevice, &tMemAllocInfo, NULL, pMemory));
-    VULKAN_CHECK(vkBindBufferMemory(ptContextComponents->tDevice, *ptBuffer, *pMemory, 0));
+    VULKAN_CHECK(vkAllocateMemory(ptContext->tDevice, &tMemAllocInfo, NULL, pMemory));
+    VULKAN_CHECK(vkBindBufferMemory(ptContext->tDevice, *ptBuffer, *pMemory, 0));
 }
 
-void hg_copy_buffer(hgVulkanContext* ptContextComponents, hgCommandResources* ptCommandComponents, VkBuffer tSrcBuffer, VkBuffer tDstBuffer, VkDeviceSize tSize)
+void hg_copy_buffer(hgVulkanContext* ptContext, hgCommandResources* ptCommands, VkBuffer tSrcBuffer, VkBuffer tDstBuffer, VkDeviceSize tSize)
 {
     // create a temporary command buffer for the copy
     VkCommandBufferAllocateInfo tBufferAllocInfo = {
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandPool        = ptCommandComponents->tCommandPool,
+        .commandPool        = ptCommands->tCommandPool,
         .commandBufferCount = 1
     };
 
     VkCommandBuffer tCommandBuffer;
-    VULKAN_CHECK(vkAllocateCommandBuffers(ptContextComponents->tDevice, &tBufferAllocInfo, &tCommandBuffer));
+    VULKAN_CHECK(vkAllocateCommandBuffers(ptContext->tDevice, &tBufferAllocInfo, &tCommandBuffer));
 
     // Record copy command
     VkCommandBufferBeginInfo tBeginCommandBufferInfo = {
@@ -644,28 +644,28 @@ void hg_copy_buffer(hgVulkanContext* ptContextComponents, hgCommandResources* pt
         .commandBufferCount = 1,
         .pCommandBuffers    = &tCommandBuffer
     };
-    VULKAN_CHECK(vkQueueSubmit(ptContextComponents->tGraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-    VULKAN_CHECK(vkQueueWaitIdle(ptContextComponents->tGraphicsQueue));  // wait for copy to finish
+    VULKAN_CHECK(vkQueueSubmit(ptContext->tGraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+    VULKAN_CHECK(vkQueueWaitIdle(ptContext->tGraphicsQueue));  // wait for copy to finish
 
-    vkFreeCommandBuffers(ptContextComponents->tDevice, ptCommandComponents->tCommandPool, 1, &tCommandBuffer);
+    vkFreeCommandBuffers(ptContext->tDevice, ptCommands->tCommandPool, 1, &tCommandBuffer);
 }
 
 // -------------------------------
 // Vertex/Index Buffer Creation
 // -------------------------------
 hgVertexBuffer 
-hg_create_vertex_buffer(hgAppData* ptState, void* pData, size_t szSize, size_t szStride)
+hg_create_vertex_buffer(hgAppData* ptAppData, void* data, size_t size, size_t stride)
 {
     hgVertexBuffer tNewBuffer = {0};
 
-    tNewBuffer.szSize = szSize;
-    tNewBuffer.uVertexCount = szSize / szStride;
+    tNewBuffer.szSize = size;
+    tNewBuffer.uVertexCount = size / stride;
 
     // create staging buffer
     VkBuffer tStagingBuffer;
     VkDeviceMemory tStagingMemory;
-    hg_create_buffer(&ptState->tContextComponents, 
-        (VkDeviceSize)szSize, 
+    hg_create_buffer(&ptAppData->tContextComponents, 
+        (VkDeviceSize)size, 
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
         &tStagingBuffer, 
@@ -673,42 +673,42 @@ hg_create_vertex_buffer(hgAppData* ptState, void* pData, size_t szSize, size_t s
 
     // Map and copy data
     void* pMapped;
-    vkMapMemory(ptState->tContextComponents.tDevice, tStagingMemory, 0, szSize, 0, &pMapped);
-    memcpy(pMapped, pData, szSize);
-    vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingMemory);
+    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, 0, size, 0, &pMapped);
+    memcpy(pMapped, data, size);
+    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory);
 
     // create device local buffer
-    hg_create_buffer(&ptState->tContextComponents, 
-        (VkDeviceSize)szSize,
+    hg_create_buffer(&ptAppData->tContextComponents, 
+        (VkDeviceSize)size,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &tNewBuffer.tBuffer,
         &tNewBuffer.tMemory);
 
     // copy staging to device
-    hg_copy_buffer(&ptState->tContextComponents, &ptState->tCommandComponents, 
-        tStagingBuffer, tNewBuffer.tBuffer, szSize);
+    hg_copy_buffer(&ptAppData->tContextComponents, &ptAppData->tCommandComponents, 
+        tStagingBuffer, tNewBuffer.tBuffer, size);
 
     // cleanup staging
-    vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingBuffer, NULL);
-    vkFreeMemory(ptState->tContextComponents.tDevice, tStagingMemory, NULL);
+    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
+    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, NULL);
 
     return tNewBuffer;
 }
 
 hgIndexBuffer 
-hg_create_index_buffer(hgAppData* ptState, uint16_t* pIndices, uint32_t uIndexCount)
+hg_create_index_buffer(hgAppData* ptAppData, uint16_t* indices, uint32_t count)
 {
     hgIndexBuffer tNewBuffer = {0};
 
-    size_t szSize = sizeof(uint16_t) * uIndexCount;
+    size_t szSize = sizeof(uint16_t) * count;
     tNewBuffer.szSize = szSize;
-    tNewBuffer.uIndexCount = uIndexCount;
+    tNewBuffer.uIndexCount = count;
 
     // Create staging buffer
     VkBuffer tStagingBuffer;
     VkDeviceMemory tStagingMemory;
-    hg_create_buffer(&ptState->tContextComponents, 
+    hg_create_buffer(&ptAppData->tContextComponents, 
         (VkDeviceSize)szSize, 
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
@@ -717,12 +717,12 @@ hg_create_index_buffer(hgAppData* ptState, uint16_t* pIndices, uint32_t uIndexCo
 
     // Map and copy
     void* pMapped;
-    vkMapMemory(ptState->tContextComponents.tDevice, tStagingMemory, 0, szSize, 0, &pMapped);
-    memcpy(pMapped, pIndices, szSize);
-    vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingMemory);
+    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, 0, szSize, 0, &pMapped);
+    memcpy(pMapped, indices, szSize);
+    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingMemory);
 
     // Create device buffer
-    hg_create_buffer(&ptState->tContextComponents, 
+    hg_create_buffer(&ptAppData->tContextComponents, 
         (VkDeviceSize)szSize, 
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -730,12 +730,12 @@ hg_create_index_buffer(hgAppData* ptState, uint16_t* pIndices, uint32_t uIndexCo
         &tNewBuffer.tMemory);
 
     // Copy
-    hg_copy_buffer(&ptState->tContextComponents, &ptState->tCommandComponents, 
+    hg_copy_buffer(&ptAppData->tContextComponents, &ptAppData->tCommandComponents, 
         tStagingBuffer, tNewBuffer.tBuffer, szSize);
 
     // Cleanup staging
-    vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingBuffer, NULL);
-    vkFreeMemory(ptState->tContextComponents.tDevice, tStagingMemory, NULL);
+    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
+    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, NULL);
 
     return tNewBuffer;
 }
@@ -743,7 +743,7 @@ hg_create_index_buffer(hgAppData* ptState, uint16_t* pIndices, uint32_t uIndexCo
 // -----------------------------------------------------------------------------
 // Descriptor Management
 // -----------------------------------------------------------------------------
-void hg_create_descriptor_set(hgAppData* ptState)
+void hg_create_descriptor_set(hgAppData* ptAppData)
 {
 
 };
@@ -762,7 +762,7 @@ hg_load_texture_data(const char* pcFileName, int* iWidthOut, int* iHeightOut)
 
 // GPU texture creation and upload
 hgTexture 
-hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, int iHeight)
+hg_create_texture(hgAppData* ptAppData, const unsigned char* pucData, int iWidth, int iHeight)
 {
     hgTexture tTexture = {0};
     tTexture.iWidth    = iWidth;
@@ -782,24 +782,24 @@ hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, 
         .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VULKAN_CHECK(vkCreateImage(ptState->tContextComponents.tDevice, &tImageInfo, NULL, &tTexture.tImage));
+    VULKAN_CHECK(vkCreateImage(ptAppData->tContextComponents.tDevice, &tImageInfo, NULL, &tTexture.tImage));
 
     // allocate memory
     VkMemoryRequirements tMemRequirements;
-    vkGetImageMemoryRequirements(ptState->tContextComponents.tDevice, tTexture.tImage, &tMemRequirements);
+    vkGetImageMemoryRequirements(ptAppData->tContextComponents.tDevice, tTexture.tImage, &tMemRequirements);
 
     VkMemoryAllocateInfo tAllocInfo = {
         .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .allocationSize  = tMemRequirements.size,
-        .memoryTypeIndex = hg_find_memory_type(&ptState->tContextComponents, 
+        .memoryTypeIndex = hg_find_memory_type(&ptAppData->tContextComponents, 
                                               tMemRequirements.memoryTypeBits,
                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
     };
-    VULKAN_CHECK(vkAllocateMemory(ptState->tContextComponents.tDevice, &tAllocInfo, NULL, &tTexture.tMemory));
-    VULKAN_CHECK(vkBindImageMemory(ptState->tContextComponents.tDevice, tTexture.tImage, tTexture.tMemory, 0));
+    VULKAN_CHECK(vkAllocateMemory(ptAppData->tContextComponents.tDevice, &tAllocInfo, NULL, &tTexture.tMemory));
+    VULKAN_CHECK(vkBindImageMemory(ptAppData->tContextComponents.tDevice, tTexture.tImage, tTexture.tMemory, 0));
 
     // upload texture data (using staging buffer)
-    hg_upload_to_image(ptState, tTexture.tImage, pucData, iWidth, iHeight);
+    hg_upload_to_image(ptAppData, tTexture.tImage, pucData, iWidth, iHeight);
 
     // create image view
     VkImageViewCreateInfo tViewInfo = {
@@ -821,7 +821,7 @@ hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, 
             .layerCount     = 1
         }
     };
-    VULKAN_CHECK(vkCreateImageView(ptState->tContextComponents.tDevice, &tViewInfo, NULL, &tTexture.tImageView));
+    VULKAN_CHECK(vkCreateImageView(ptAppData->tContextComponents.tDevice, &tViewInfo, NULL, &tTexture.tImageView));
 
     return tTexture;
 }
@@ -830,24 +830,24 @@ hg_create_texture(hgAppData* ptState, const unsigned char* pucData, int iWidth, 
 
 // internal upload helper
 void 
-hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pData, int iWidth, int iHeight)
+hg_upload_to_image(hgAppData* ptAppData, VkImage tImage, const unsigned char* pData, int iWidth, int iHeight)
 {
     VkDeviceSize imageSize = iWidth * iHeight * 4; // RGBA8
 
     // create staging buffer
     VkBuffer       tStagingBuffer;
     VkDeviceMemory tStagingBufferMemory;
-    hg_create_buffer(&ptState->tContextComponents, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+    hg_create_buffer(&ptAppData->tContextComponents, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &tStagingBuffer, &tStagingBufferMemory);
 
     // copy data to staging buffer
     void* pMapped;
-    vkMapMemory(ptState->tContextComponents.tDevice, tStagingBufferMemory, 0, imageSize, 0, &pMapped);
+    vkMapMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory, 0, imageSize, 0, &pMapped);
     memcpy(pMapped, pData, imageSize);
-    vkUnmapMemory(ptState->tContextComponents.tDevice, tStagingBufferMemory);
+    vkUnmapMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory);
 
     // record copy commands
-    VkCommandBuffer tCmdBuffer = hg_begin_single_time_commands(ptState);
+    VkCommandBuffer tCmdBuffer = hg_begin_single_time_commands(ptAppData);
 
     // transition to transfer dst
     VkImageSubresourceRange tSubResRan = {
@@ -882,18 +882,18 @@ hg_upload_to_image(hgAppData* ptState, VkImage tImage, const unsigned char* pDat
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tSubResRan, VK_PIPELINE_STAGE_TRANSFER_BIT, 
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-    hg_end_single_time_commands(ptState, tCmdBuffer);
+    hg_end_single_time_commands(ptAppData, tCmdBuffer);
 
     // cleanup staging
-    vkDestroyBuffer(ptState->tContextComponents.tDevice, tStagingBuffer, NULL);
-    vkFreeMemory(ptState->tContextComponents.tDevice, tStagingBufferMemory, NULL);
+    vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
+    vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingBufferMemory, NULL);
 }
 
 // -----------------------------------------------------------------------------
 // Shader Management
 // -----------------------------------------------------------------------------
 VkShaderModule 
-hg_create_shader_module(hgAppData* ptState, const char* pcFilename) 
+hg_create_shader_module(hgAppData* ptAppData, const char* pcFilename) 
 {
     // TODO: clean up paths
     const char* apcPossiblePaths[] = {
@@ -944,7 +944,7 @@ hg_create_shader_module(hgAppData* ptState, const char* pcFilename)
     };
 
     VkShaderModule tShaderModule;
-    VULKAN_CHECK(vkCreateShaderModule(ptState->tContextComponents.tDevice, &tCreateInfo, NULL, &tShaderModule));
+    VULKAN_CHECK(vkCreateShaderModule(ptAppData->tContextComponents.tDevice, &tCreateInfo, NULL, &tShaderModule));
 
     free(puCode);
     return tShaderModule;
@@ -954,147 +954,123 @@ hg_create_shader_module(hgAppData* ptState, const char* pcFilename)
 // Cleanup & Resource Destruction
 // -----------------------------------------------------------------------------
 void 
-hg_cleanup(hgAppData* ptState) 
+hg_cleanup(hgAppData* ptAppData) 
 {
     // TODO: cleanup function is temporary and alternate clean up scenario needed
-    vkDeviceWaitIdle(ptState->tContextComponents.tDevice);
+    vkDeviceWaitIdle(ptAppData->tContextComponents.tDevice);
 
-    if(ptState->tCommandComponents.tCommandBuffers) 
+    if(ptAppData->tCommandComponents.tCommandBuffers) 
     {
-        vkFreeCommandBuffers(ptState->tContextComponents.tDevice, 
-                           ptState->tCommandComponents.tCommandPool,
-                           ptState->tSwapchainComponents.uSwapchainImageCount,
-                           ptState->tCommandComponents.tCommandBuffers);
-        free(ptState->tCommandComponents.tCommandBuffers);
-        ptState->tCommandComponents.tCommandBuffers = NULL;
+        vkFreeCommandBuffers(ptAppData->tContextComponents.tDevice, 
+                           ptAppData->tCommandComponents.tCommandPool,
+                           ptAppData->tSwapchainComponents.uSwapchainImageCount,
+                           ptAppData->tCommandComponents.tCommandBuffers);
+        free(ptAppData->tCommandComponents.tCommandBuffers);
+        ptAppData->tCommandComponents.tCommandBuffers = NULL;
     }
 
-    if(ptState->tCommandComponents.tCommandPool != VK_NULL_HANDLE) 
+    if(ptAppData->tCommandComponents.tCommandPool != VK_NULL_HANDLE) 
     {
-        vkDestroyCommandPool(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, NULL);
-        ptState->tCommandComponents.tCommandPool = VK_NULL_HANDLE;
+        vkDestroyCommandPool(ptAppData->tContextComponents.tDevice, ptAppData->tCommandComponents.tCommandPool, NULL);
+        ptAppData->tCommandComponents.tCommandPool = VK_NULL_HANDLE;
     }
 
 
-    if(ptState->tSyncComponents.tImageAvailable != VK_NULL_HANDLE) 
+    if(ptAppData->tSyncComponents.tImageAvailable != VK_NULL_HANDLE) 
     {
-        vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tImageAvailable, NULL);
-        ptState->tSyncComponents.tImageAvailable = VK_NULL_HANDLE;
+        vkDestroySemaphore(ptAppData->tContextComponents.tDevice, ptAppData->tSyncComponents.tImageAvailable, NULL);
+        ptAppData->tSyncComponents.tImageAvailable = VK_NULL_HANDLE;
     }
-    if(ptState->tSyncComponents.tRenderFinished != VK_NULL_HANDLE) 
+    if(ptAppData->tSyncComponents.tRenderFinished != VK_NULL_HANDLE) 
     {
-        vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tRenderFinished, NULL);
-        ptState->tSyncComponents.tRenderFinished = VK_NULL_HANDLE;
+        vkDestroySemaphore(ptAppData->tContextComponents.tDevice, ptAppData->tSyncComponents.tRenderFinished, NULL);
+        ptAppData->tSyncComponents.tRenderFinished = VK_NULL_HANDLE;
     }
-    if(ptState->tSyncComponents.tInFlight != VK_NULL_HANDLE) 
+    if(ptAppData->tSyncComponents.tInFlight != VK_NULL_HANDLE) 
     {
-        vkDestroyFence(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tInFlight, NULL);
-        ptState->tSyncComponents.tInFlight = VK_NULL_HANDLE;
+        vkDestroyFence(ptAppData->tContextComponents.tDevice, ptAppData->tSyncComponents.tInFlight, NULL);
+        ptAppData->tSyncComponents.tInFlight = VK_NULL_HANDLE;
     }
 
-    if(ptState->tPipelineComponents.tFramebuffers) 
+    if(ptAppData->tPipelineComponents.tFramebuffers) 
     {
-        for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
+        for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++) 
         {
-            if(ptState->tPipelineComponents.tFramebuffers[i] != VK_NULL_HANDLE) 
+            if(ptAppData->tPipelineComponents.tFramebuffers[i] != VK_NULL_HANDLE) 
             {
-                vkDestroyFramebuffer(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tFramebuffers[i], NULL);
-                ptState->tPipelineComponents.tFramebuffers[i] = VK_NULL_HANDLE;
+                vkDestroyFramebuffer(ptAppData->tContextComponents.tDevice, ptAppData->tPipelineComponents.tFramebuffers[i], NULL);
+                ptAppData->tPipelineComponents.tFramebuffers[i] = VK_NULL_HANDLE;
             }
         }
-        free(ptState->tPipelineComponents.tFramebuffers);
-        ptState->tPipelineComponents.tFramebuffers = NULL;
+        free(ptAppData->tPipelineComponents.tFramebuffers);
+        ptAppData->tPipelineComponents.tFramebuffers = NULL;
     }
 
-    if(ptState->tResources.tDescriptorSets && ptState->tResources.tDescriptorPool != VK_NULL_HANDLE) 
+    if(ptAppData->tPipelineComponents.tRenderPass != VK_NULL_HANDLE) 
     {
-        if(ptState->tResources.tDescriptorSets[0] != VK_NULL_HANDLE) 
+        vkDestroyRenderPass(ptAppData->tContextComponents.tDevice, ptAppData->tPipelineComponents.tRenderPass, NULL);
+        ptAppData->tPipelineComponents.tRenderPass = VK_NULL_HANDLE;
+    }
+
+    if(ptAppData->tSwapchainComponents.tSwapchainImageViews) 
+    {
+        for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++)
         {
-            vkFreeDescriptorSets(ptState->tContextComponents.tDevice, 
-                               ptState->tResources.tDescriptorPool,
-                               1,  // count
-                               ptState->tResources.tDescriptorSets);
-        }
-        free(ptState->tResources.tDescriptorSets);
-    }
-
-    if(ptState->tResources.tDescriptorPool != VK_NULL_HANDLE) 
-    {
-        vkDestroyDescriptorPool(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorPool, NULL);
-        ptState->tResources.tDescriptorPool = VK_NULL_HANDLE;
-    }
-
-    if(ptState->tResources.tDescriptorSetLayout != VK_NULL_HANDLE) 
-    {
-        vkDestroyDescriptorSetLayout(ptState->tContextComponents.tDevice, ptState->tResources.tDescriptorSetLayout, NULL);
-        ptState->tResources.tDescriptorSetLayout = VK_NULL_HANDLE;
-    }
-
-    if(ptState->tPipelineComponents.tRenderPass != VK_NULL_HANDLE) 
-    {
-        vkDestroyRenderPass(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tRenderPass, NULL);
-        ptState->tPipelineComponents.tRenderPass = VK_NULL_HANDLE;
-    }
-
-    if(ptState->tSwapchainComponents.tSwapchainImageViews) 
-    {
-        for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++)
-        {
-            if(ptState->tSwapchainComponents.tSwapchainImageViews[i] != VK_NULL_HANDLE)
+            if(ptAppData->tSwapchainComponents.tSwapchainImageViews[i] != VK_NULL_HANDLE)
             {
-                vkDestroyImageView(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchainImageViews[i], NULL);
-                ptState->tSwapchainComponents.tSwapchainImageViews[i] = VK_NULL_HANDLE;
+                vkDestroyImageView(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchainImageViews[i], NULL);
+                ptAppData->tSwapchainComponents.tSwapchainImageViews[i] = VK_NULL_HANDLE;
             }
         }
-        free(ptState->tSwapchainComponents.tSwapchainImageViews);
-        ptState->tSwapchainComponents.tSwapchainImageViews = NULL;
+        free(ptAppData->tSwapchainComponents.tSwapchainImageViews);
+        ptAppData->tSwapchainComponents.tSwapchainImageViews = NULL;
     }
 
-    if(ptState->tSwapchainComponents.tSwapchainImages) 
+    if(ptAppData->tSwapchainComponents.tSwapchainImages) 
     {
-        free(ptState->tSwapchainComponents.tSwapchainImages);
-        ptState->tSwapchainComponents.tSwapchainImages = NULL;
+        free(ptAppData->tSwapchainComponents.tSwapchainImages);
+        ptAppData->tSwapchainComponents.tSwapchainImages = NULL;
     }
 
-    if(ptState->tSwapchainComponents.tSwapchain != VK_NULL_HANDLE) 
+    if(ptAppData->tSwapchainComponents.tSwapchain != VK_NULL_HANDLE) 
     {
-        vkDestroySwapchainKHR(ptState->tContextComponents.tDevice, ptState->tSwapchainComponents.tSwapchain, NULL);
-        ptState->tSwapchainComponents.tSwapchain = VK_NULL_HANDLE;
+        vkDestroySwapchainKHR(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchain, NULL);
+        ptAppData->tSwapchainComponents.tSwapchain = VK_NULL_HANDLE;
     }
 
-    if(ptState->tSwapchainComponents.tSurface != VK_NULL_HANDLE) 
+    if(ptAppData->tSwapchainComponents.tSurface != VK_NULL_HANDLE) 
     {
-        vkDestroySurfaceKHR(ptState->tContextComponents.tInstance, ptState->tSwapchainComponents.tSurface, NULL);
-        ptState->tSwapchainComponents.tSurface = VK_NULL_HANDLE;
+        vkDestroySurfaceKHR(ptAppData->tContextComponents.tInstance, ptAppData->tSwapchainComponents.tSurface, NULL);
+        ptAppData->tSwapchainComponents.tSurface = VK_NULL_HANDLE;
     }
 
-    if(ptState->tContextComponents.tDevice != VK_NULL_HANDLE) {
-        vkDestroyDevice(ptState->tContextComponents.tDevice, NULL);
-        ptState->tContextComponents.tDevice = VK_NULL_HANDLE;
+    if(ptAppData->tContextComponents.tDevice != VK_NULL_HANDLE) {
+        vkDestroyDevice(ptAppData->tContextComponents.tDevice, NULL);
+        ptAppData->tContextComponents.tDevice = VK_NULL_HANDLE;
     }
 
-    if(ptState->tContextComponents.tInstance != VK_NULL_HANDLE) 
+    if(ptAppData->tContextComponents.tInstance != VK_NULL_HANDLE) 
     {
-        vkDestroyInstance(ptState->tContextComponents.tInstance, NULL);
-        ptState->tContextComponents.tInstance = VK_NULL_HANDLE;
+        vkDestroyInstance(ptAppData->tContextComponents.tInstance, NULL);
+        ptAppData->tContextComponents.tInstance = VK_NULL_HANDLE;
     }
 }
 
 void 
-hg_destroy_pipeline(hgAppData* ptState, hgPipeline* tPipeline)
+hg_destroy_pipeline(hgAppData* ptAppData, hgPipeline* tPipeline)
 {
-    if(tPipeline->tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline      (ptState->tContextComponents.tDevice, tPipeline->tPipeline, NULL);
-    if(tPipeline->tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptState->tContextComponents.tDevice, tPipeline->tPipelineLayout, NULL);
+    if(tPipeline->tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline      (ptAppData->tContextComponents.tDevice, tPipeline->tPipeline, NULL);
+    if(tPipeline->tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptAppData->tContextComponents.tDevice, tPipeline->tPipelineLayout, NULL);
 
 };
 
 // Texture cleanup
 void 
-hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture)
+hg_destroy_texture(hgAppData* ptAppData, hgTexture* tTexture)
 {
-    if(tTexture->tImageView != VK_NULL_HANDLE) vkDestroyImageView(ptState->tContextComponents.tDevice, tTexture->tImageView, NULL);
-    if(tTexture->tImage != VK_NULL_HANDLE)     vkDestroyImage(ptState->tContextComponents.tDevice, tTexture->tImage, NULL);
-    if(tTexture->tMemory != VK_NULL_HANDLE)    vkFreeMemory(ptState->tContextComponents.tDevice, tTexture->tMemory, NULL);
+    if(tTexture->tImageView != VK_NULL_HANDLE) vkDestroyImageView(ptAppData->tContextComponents.tDevice, tTexture->tImageView, NULL);
+    if(tTexture->tImage != VK_NULL_HANDLE)     vkDestroyImage(ptAppData->tContextComponents.tDevice, tTexture->tImage, NULL);
+    if(tTexture->tMemory != VK_NULL_HANDLE)    vkFreeMemory(ptAppData->tContextComponents.tDevice, tTexture->tMemory, NULL);
 
     memset(tTexture, 0, sizeof(hgTexture));
 }
@@ -1105,16 +1081,16 @@ hg_destroy_texture(hgAppData* ptState, hgTexture* tTexture)
 
 // Single-time command buffer helpers
 VkCommandBuffer 
-hg_begin_single_time_commands(hgAppData* ptState) 
+hg_begin_single_time_commands(hgAppData* ptAppData) 
 {
     VkCommandBufferAllocateInfo tAllocInfo = {
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandPool        = ptState->tCommandComponents.tCommandPool,
+        .commandPool        = ptAppData->tCommandComponents.tCommandPool,
         .commandBufferCount = 1
     };
     VkCommandBuffer tCommandBuffer;
-    VULKAN_CHECK(vkAllocateCommandBuffers(ptState->tContextComponents.tDevice, &tAllocInfo, &tCommandBuffer));
+    VULKAN_CHECK(vkAllocateCommandBuffers(ptAppData->tContextComponents.tDevice, &tAllocInfo, &tCommandBuffer));
 
     VkCommandBufferBeginInfo tBeginInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1125,7 +1101,7 @@ hg_begin_single_time_commands(hgAppData* ptState)
 }
 
 void 
-hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer tCommandBuffer) 
+hg_end_single_time_commands(hgAppData* ptAppData, VkCommandBuffer tCommandBuffer) 
 {
     VULKAN_CHECK(vkEndCommandBuffer(tCommandBuffer));
 
@@ -1136,11 +1112,11 @@ hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer tCommandBuffer)
     };
 
     // submit and wait for completion
-    VULKAN_CHECK(vkQueueSubmit(ptState->tContextComponents.tGraphicsQueue, 1, &tSubmitInfo, VK_NULL_HANDLE));
-    VULKAN_CHECK(vkQueueWaitIdle(ptState->tContextComponents.tGraphicsQueue));
+    VULKAN_CHECK(vkQueueSubmit(ptAppData->tContextComponents.tGraphicsQueue, 1, &tSubmitInfo, VK_NULL_HANDLE));
+    VULKAN_CHECK(vkQueueWaitIdle(ptAppData->tContextComponents.tGraphicsQueue));
 
     // free the command buffer
-    vkFreeCommandBuffers(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, 1, &tCommandBuffer);
+    vkFreeCommandBuffers(ptAppData->tContextComponents.tDevice, ptAppData->tCommandComponents.tCommandPool, 1, &tCommandBuffer);
 }
 
 // Image layout transition helper

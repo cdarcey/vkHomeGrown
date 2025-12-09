@@ -74,8 +74,9 @@ int main(void)
 
 
     // descriptors 
-    *tState.tResources.tDescriptorSets = malloc(sizeof(VkDescriptorSet));
-    tState.tResources.tDescriptorSets[0] = VK_NULL_HANDLE;
+    VkDescriptorPool      tDescPool            = VK_NULL_HANDLE;
+    VkDescriptorSetLayout tDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorSet       tDescriptorSet       = VK_NULL_HANDLE;
 
     // desc pool
     VkDescriptorPoolSize tDescPoolSize[] = {
@@ -89,7 +90,7 @@ int main(void)
         .poolSizeCount = 1,
         .pPoolSizes    = tDescPoolSize,
     };
-    VULKAN_CHECK(vkCreateDescriptorPool(tState.tContextComponents.tDevice, &tDescPoolCreateInfo, NULL, &tState.tResources.tDescriptorPool));
+    VULKAN_CHECK(vkCreateDescriptorPool(tState.tContextComponents.tDevice, &tDescPoolCreateInfo, NULL, &tDescPool));
 
     // sets and layouts
     VkDescriptorSetLayoutBinding tTextureAttachmentBinding = {
@@ -103,16 +104,16 @@ int main(void)
         .bindingCount = 1,
         .pBindings    = &tTextureAttachmentBinding
     };
-    VULKAN_CHECK(vkCreateDescriptorSetLayout(tState.tContextComponents.tDevice, &tDescriptorLayoutInfo, NULL, &tState.tResources.tDescriptorSetLayout));
+    VULKAN_CHECK(vkCreateDescriptorSetLayout(tState.tContextComponents.tDevice, &tDescriptorLayoutInfo, NULL, &tDescriptorSetLayout));
 
     // allocate
     const VkDescriptorSetAllocateInfo tDescSetAllocInfo = {
         .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool     = tState.tResources.tDescriptorPool,
+        .descriptorPool     = tDescPool,
         .descriptorSetCount = 1,
-        .pSetLayouts        = &tState.tResources.tDescriptorSetLayout
+        .pSetLayouts        = &tDescriptorSetLayout
     };
-    VULKAN_CHECK(vkAllocateDescriptorSets(tState.tContextComponents.tDevice, &tDescSetAllocInfo, tState.tResources.tDescriptorSets));
+    VULKAN_CHECK(vkAllocateDescriptorSets(tState.tContextComponents.tDevice, &tDescSetAllocInfo, &tDescriptorSet));
 
     // texture loading and sampler creation
     int iTextureHeight = 0;
@@ -150,7 +151,7 @@ int main(void)
 
     VkWriteDescriptorSet tDescriptorWrite = {
         .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet          = *tState.tResources.tDescriptorSets,
+        .dstSet          = tDescriptorSet,
         .dstBinding      = 0,
         .dstArrayElement = 0,
         .descriptorCount = 1,
@@ -177,7 +178,7 @@ int main(void)
         .tCullMode                 = VK_CULL_MODE_NONE,
         .tFrontFace                = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .tTopology                 = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        .ptDescriptorSetLayouts    = &tState.tResources.tDescriptorSetLayout,
+        .ptDescriptorSetLayouts    = &tDescriptorSetLayout,
         .uDescriptorSetLayoutCount = 1,
         .ptPushConstantRanges      = NULL,
         .uPushConstantRangeCount   = 0
@@ -203,12 +204,9 @@ int main(void)
         };
         VULKAN_CHECK(vkBeginCommandBuffer(tState.tCommandComponents.tCommandBuffers[i], &tBeginInfo));
 
-        VkClearValue tClearColor = {{{
-            tState.afClearColor[0],
-            tState.afClearColor[1],
-            tState.afClearColor[2],
-            tState.afClearColor[3]
-        }}};
+        VkClearValue tClearColor = {
+            .color = {{1.0f, 1.0f, 1.0f, 1.0f}}  // RGBA format
+        };
 
         VkRenderPassBeginInfo tRenderPassInfo = {
             .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -224,10 +222,10 @@ int main(void)
         vkCmdBeginRenderPass(tState.tCommandComponents.tCommandBuffers[i], &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
 
-        if(tState.tResources.tDescriptorSets != NULL && tState.tResources.tDescriptorSets[0] != VK_NULL_HANDLE) 
+        if(tDescriptorSet != NULL || tDescriptorSet != VK_NULL_HANDLE) 
         {
             vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                tTestPipeline.tPipelineLayout, 0, 1, &tState.tResources.tDescriptorSets[0], 0, NULL);
+                tTestPipeline.tPipelineLayout, 0, 1, &tDescriptorSet, 0, NULL);
         }
 
         // bind vertex buffer
