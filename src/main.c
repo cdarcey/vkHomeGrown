@@ -45,7 +45,7 @@ int main(void)
 
     // test vertex & index data
     float fTestVertices[] = {
-        // x,   y,    r,   g,   b,   a,   u,   v
+        // x, y,      r, g, b, a,             u, v
         -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,  // bottom-left  -> red
          0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f,  // bottom-right -> green
          0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // top-right    -> blue
@@ -236,6 +236,7 @@ int main(void)
 
     // cleanup
     vkDeviceWaitIdle(tState.tContextComponents.tDevice);  // wait before cleanup
+    hg_destroy_texture(&tState, &tTestTexture);
     hg_cleanup(&tState);
     glfwDestroyWindow(window);
     glfwTerminate();

@@ -219,7 +219,6 @@ hgIndexBuffer  hg_create_index_buffer(hgAppData* ptState, uint16_t* indices, uin
 // textures
 unsigned char* hg_load_texture_data(const char* filename, int* widthOut, int* heightOut);
 hgTexture      hg_create_texture(hgAppData* ptState, const unsigned char* data, int width, int height);
-void           hg_destroy_texture(hgAppData* ptState, hgTexture* texture);
 
 // pipelines
 hgPipeline hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* config);
@@ -270,6 +269,6 @@ void hg_draw_mesh(hgAppData* ptState, hgVertexBuffer* tVertexBuffer, hgIndexBuff
 void hg_cleanup(hgAppData* ptState);
 
 void hg_cleanup_swapchain_resources(hgAppData* ptState); // for swapchain rebuilding on window resize
-
+void hg_destroy_texture(hgAppData* ptState, hgTexture* texture);
 
 #endif // VKHOMEGROWN_H

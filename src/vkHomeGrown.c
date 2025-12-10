@@ -86,12 +86,7 @@ void
 hg_create_surface(hgAppData* ptAppData) 
 {
     // GLFW handles platform specific surface creation
-    VULKAN_CHECK(glfwCreateWindowSurface(
-        ptAppData->tContextComponents.tInstance,
-        ptAppData->pWindow,
-        NULL,
-        &ptAppData->tSwapchainComponents.tSurface
-    ));
+    VULKAN_CHECK(glfwCreateWindowSurface(ptAppData->tContextComponents.tInstance, ptAppData->pWindow, NULL, &ptAppData->tSwapchainComponents.tSurface));
 }
 
 void 
