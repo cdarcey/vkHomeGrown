@@ -7,8 +7,8 @@ int main(void)
 {
 
     // example settings
-    bool bQuad     = true;
-    bool bTextured = false;
+    bool bQuad     = true;  // false renders a triangle
+    bool bTextured = false; // false renders colors in vert data 
 
     // init GLFW
     if (!glfwInit()) 
@@ -48,28 +48,26 @@ int main(void)
     hg_create_logical_device(&tState);
 
 
-    // test vertex & index data
+    // test vertex & index data for quad
     float fTestVerticesQuad[] = {
         // x, y,      r, g, b, a,             u, v
         -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,   // top left     -> red
         -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,   // bottom left  -> yellow
          0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // bottom right -> blue
          0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f    // top right    -> green
-
-
     };
     uint16_t uTestIndices[6] = {
         0, 1, 2,  // first triangle  (TL, BL, BR)
         2, 3, 0   // second triangle (BR, TR, TL)
     };
 
+    // test vertex data for triangle 
     float fTestVerticesTriangle[] = {
         // x, y,      r, g, b, a,              u, v
          0.0f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.0f,   // top          -> red
         -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,   // bottom left  -> green
          0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // bottom right -> blue
     };
-
 
     hgRenderPassConfig tConfig = {
         .tLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,

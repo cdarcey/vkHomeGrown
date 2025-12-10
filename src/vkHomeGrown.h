@@ -242,7 +242,7 @@ void hg_end_render_pass(hgAppData* ptState);
 
 
 // bind state (must be called between begin/end render pass)
-// may not do these functions as it doesnt really make sense to stash away the vulkan code on thses
+// may not do these functions as it doesnt really make sense to stash away the vulkan code on these
 void hg_cmd_bind_pipeline(hgAppData* ptState, hgPipeline* tPipeline);
 void hg_cmd_bind_vertex_buffer(hgAppData* ptState, hgVertexBuffer* tVertexBuffer);
 // bind vertex buffer for subsequent draw calls
@@ -263,7 +263,7 @@ void hg_draw_mesh(hgAppData* ptState, hgVertexBuffer* tVertexBuffer, hgIndexBuff
 // convenience function - binds vertex/index buffers and draws in one call
 
 // =============================================================================
-// CLEANUP (Call at shutdown) -> will be replaced with more granular functions 
+// CLEANUP
 // =============================================================================
 
 void hg_core_cleanup(hgAppData* ptState); // should be called after all other cleanup
