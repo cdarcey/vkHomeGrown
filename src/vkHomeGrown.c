@@ -70,7 +70,6 @@ hg_create_instance(hgAppData* ptAppData, const char* pcAppName, uint32_t uAppVer
         .ppEnabledExtensionNames = glfwExtensions       // Use GLFW's extensions
     };
 
-    // TODO: figure this system out 
     // optional: Add validation layers if needed 
     if(bEnableValidation)
     {
@@ -604,7 +603,7 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
 
     VkPipelineInputAssemblyStateCreateInfo tInputAssembly = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology               = ptConfig->tTopology,
+        .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, // hard coded for now
         .primitiveRestartEnable = VK_FALSE
     };
 
@@ -674,6 +673,7 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
     };
 
     hgPipeline tPipelineResult = {0};
+    tPipelineResult.tPipelineBindPoint = ptConfig->tPipelineBindPoint;
 
     VULKAN_CHECK(vkCreatePipelineLayout(ptAppData->tContextComponents.tDevice, &tPipelineLayoutInfo, NULL, 
             &tPipelineResult.tPipelineLayout));
@@ -705,6 +705,46 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
     vkDestroyShaderModule(ptAppData->tContextComponents.tDevice, tFragShaderModule, NULL);
 
     return tPipelineResult;
+}
+
+VkDescriptorPool 
+hg_create_descriptor_pool(hgAppData* ptState, uint32_t uMaxSets, VkDescriptorPoolSize* atPoolSizes, uint32_t uPoolSizeCount)
+{
+    VkDescriptorPool tDescPool = VK_NULL_HANDLE;
+
+    // desc pool
+    const VkDescriptorPoolCreateInfo tDescPoolCreateInfo = {
+        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets       = uMaxSets,
+        .poolSizeCount = uPoolSizeCount,
+        .pPoolSizes    = atPoolSizes,
+    };
+    VULKAN_CHECK(vkCreateDescriptorPool(ptState->tContextComponents.tDevice, &tDescPoolCreateInfo, NULL, &tDescPool));
+
+    return tDescPool;
+}
+
+void
+hg_update_texture_descriptor(hgAppData* ptState, VkDescriptorSet tDescriptorSet, uint32_t uBinding, hgTexture* tTexture, VkSampler tSampler)
+{
+    // update descriptor set with texture
+    VkDescriptorImageInfo tImageInfo = {
+        .sampler     = tSampler,
+        .imageView   = tTexture->tImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    VkWriteDescriptorSet tDescriptorWrite = {
+        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet          = tDescriptorSet,
+        .dstBinding      = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo      = &tImageInfo
+    };
+    vkUpdateDescriptorSets(ptState->tContextComponents.tDevice, 1, &tDescriptorWrite, 0, NULL);
 }
 
 // =============================================================================
@@ -813,7 +853,14 @@ hg_end_render_pass(hgAppData* ptState)
 // -------------------------------
 // bind state
 // -------------------------------
-// TODO: implement hg_cmd_bind_pipeline, hg_cmd_bind_vertex_buffer, etc.
+
+void 
+hg_cmd_bind_pipeline(hgAppData* ptState, hgPipeline* tPipeline)
+{
+    // get command buffer
+    VkCommandBuffer tCommandBuffer = hg_get_current_frame_cmd_buffer(ptState);
+    vkCmdBindPipeline(tCommandBuffer, tPipeline->tPipelineBindPoint, tPipeline->tPipeline);
+}
 
 // -------------------------------
 // draw commands
@@ -830,106 +877,72 @@ hg_end_render_pass(hgAppData* ptState)
 // =============================================================================
 
 void 
-hg_cleanup(hgAppData* ptAppData) 
+hg_core_cleanup(hgAppData* ptState)
 {
-    // TODO: cleanup function is temporary and alternate clean up scenario needed
-    vkDeviceWaitIdle(ptAppData->tContextComponents.tDevice);
+    if (!ptState) return;
+    vkDeviceWaitIdle(ptState->tContextComponents.tDevice);
+    hg_cleanup_swapchain_resources(ptState); // handles swapchain and related components
 
-    if(ptAppData->tCommandComponents.tCommandBuffers) 
+    // destroy surface (not in swapchain resources function)
+    if (ptState->tSwapchainComponents.tSurface != VK_NULL_HANDLE) 
     {
-        vkFreeCommandBuffers(ptAppData->tContextComponents.tDevice, 
-                           ptAppData->tCommandComponents.tCommandPool,
-                           ptAppData->tSwapchainComponents.uSwapchainImageCount,
-                           ptAppData->tCommandComponents.tCommandBuffers);
-        free(ptAppData->tCommandComponents.tCommandBuffers);
-        ptAppData->tCommandComponents.tCommandBuffers = NULL;
+        vkDestroySurfaceKHR(ptState->tContextComponents.tInstance, ptState->tSwapchainComponents.tSurface, NULL);
+        ptState->tSwapchainComponents.tSurface = VK_NULL_HANDLE;
     }
 
-    if(ptAppData->tCommandComponents.tCommandPool != VK_NULL_HANDLE) 
+    // cleanup Pipeline Components (except framebuffers) -> note: framebuffers already destroyed by hg_cleanup_swapchain_resources()
+    // destroy render pass
+    if (ptState->tPipelineComponents.tRenderPass != VK_NULL_HANDLE) 
     {
-        vkDestroyCommandPool(ptAppData->tContextComponents.tDevice, ptAppData->tCommandComponents.tCommandPool, NULL);
-        ptAppData->tCommandComponents.tCommandPool = VK_NULL_HANDLE;
+        vkDestroyRenderPass(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tRenderPass, NULL);
+        ptState->tPipelineComponents.tRenderPass = VK_NULL_HANDLE;
     }
 
-
-    if(ptAppData->tSyncComponents.tImageAvailable != VK_NULL_HANDLE) 
+    // Cleanup Command Components (except framce command buffers) -> note: frame command buffers already freed by hg_cleanup_swapchain_resources()
+    // destroy command pool
+    if (ptState->tCommandComponents.tCommandPool != VK_NULL_HANDLE) 
     {
-        vkDestroySemaphore(ptAppData->tContextComponents.tDevice, ptAppData->tSyncComponents.tImageAvailable, NULL);
-        ptAppData->tSyncComponents.tImageAvailable = VK_NULL_HANDLE;
-    }
-    if(ptAppData->tSyncComponents.tRenderFinished != VK_NULL_HANDLE) 
-    {
-        vkDestroySemaphore(ptAppData->tContextComponents.tDevice, ptAppData->tSyncComponents.tRenderFinished, NULL);
-        ptAppData->tSyncComponents.tRenderFinished = VK_NULL_HANDLE;
-    }
-    if(ptAppData->tSyncComponents.tInFlight != VK_NULL_HANDLE) 
-    {
-        vkDestroyFence(ptAppData->tContextComponents.tDevice, ptAppData->tSyncComponents.tInFlight, NULL);
-        ptAppData->tSyncComponents.tInFlight = VK_NULL_HANDLE;
+        vkDestroyCommandPool(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, NULL);
+        ptState->tCommandComponents.tCommandPool = VK_NULL_HANDLE;
     }
 
-    if(ptAppData->tPipelineComponents.tFramebuffers) 
+    // cleanup Sync Components
+    if (ptState->tSyncComponents.tImageAvailable != VK_NULL_HANDLE) 
     {
-        for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++) 
-        {
-            if(ptAppData->tPipelineComponents.tFramebuffers[i] != VK_NULL_HANDLE) 
-            {
-                vkDestroyFramebuffer(ptAppData->tContextComponents.tDevice, ptAppData->tPipelineComponents.tFramebuffers[i], NULL);
-                ptAppData->tPipelineComponents.tFramebuffers[i] = VK_NULL_HANDLE;
-            }
-        }
-        free(ptAppData->tPipelineComponents.tFramebuffers);
-        ptAppData->tPipelineComponents.tFramebuffers = NULL;
+        vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tImageAvailable, NULL);
+        ptState->tSyncComponents.tImageAvailable = VK_NULL_HANDLE;
+    }
+    if (ptState->tSyncComponents.tRenderFinished != VK_NULL_HANDLE) 
+    {
+        vkDestroySemaphore(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tRenderFinished, NULL);
+        ptState->tSyncComponents.tRenderFinished = VK_NULL_HANDLE;
+    }
+    if (ptState->tSyncComponents.tInFlight != VK_NULL_HANDLE) 
+    {
+        vkDestroyFence(ptState->tContextComponents.tDevice, ptState->tSyncComponents.tInFlight, NULL);
+        ptState->tSyncComponents.tInFlight = VK_NULL_HANDLE;
     }
 
-    if(ptAppData->tPipelineComponents.tRenderPass != VK_NULL_HANDLE) 
+    // cleanup Vulkan Context (device and instance)
+    // note: physical device doesn't need to be destroyed
+    if (ptState->tContextComponents.tDevice != VK_NULL_HANDLE) 
     {
-        vkDestroyRenderPass(ptAppData->tContextComponents.tDevice, ptAppData->tPipelineComponents.tRenderPass, NULL);
-        ptAppData->tPipelineComponents.tRenderPass = VK_NULL_HANDLE;
+        vkDestroyDevice(ptState->tContextComponents.tDevice, NULL);
+        ptState->tContextComponents.tDevice = VK_NULL_HANDLE;
+    }
+    if (ptState->tContextComponents.tInstance != VK_NULL_HANDLE) 
+    {
+        vkDestroyInstance(ptState->tContextComponents.tInstance, NULL);
+        ptState->tContextComponents.tInstance = VK_NULL_HANDLE;
     }
 
-    if(ptAppData->tSwapchainComponents.tSwapchainImageViews) 
-    {
-        for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++)
-        {
-            if(ptAppData->tSwapchainComponents.tSwapchainImageViews[i] != VK_NULL_HANDLE)
-            {
-                vkDestroyImageView(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchainImageViews[i], NULL);
-                ptAppData->tSwapchainComponents.tSwapchainImageViews[i] = VK_NULL_HANDLE;
-            }
-        }
-        free(ptAppData->tSwapchainComponents.tSwapchainImageViews);
-        ptAppData->tSwapchainComponents.tSwapchainImageViews = NULL;
-    }
+    // reset counts and state
+    ptState->tSwapchainComponents.uSwapchainImageCount = 0;
+    ptState->tCommandComponents.uCurrentImageIndex = 0;
+    ptState->width = 0;
+    ptState->height = 0;
 
-    if(ptAppData->tSwapchainComponents.tSwapchainImages) 
-    {
-        free(ptAppData->tSwapchainComponents.tSwapchainImages);
-        ptAppData->tSwapchainComponents.tSwapchainImages = NULL;
-    }
-
-    if(ptAppData->tSwapchainComponents.tSwapchain != VK_NULL_HANDLE) 
-    {
-        vkDestroySwapchainKHR(ptAppData->tContextComponents.tDevice, ptAppData->tSwapchainComponents.tSwapchain, NULL);
-        ptAppData->tSwapchainComponents.tSwapchain = VK_NULL_HANDLE;
-    }
-
-    if(ptAppData->tSwapchainComponents.tSurface != VK_NULL_HANDLE) 
-    {
-        vkDestroySurfaceKHR(ptAppData->tContextComponents.tInstance, ptAppData->tSwapchainComponents.tSurface, NULL);
-        ptAppData->tSwapchainComponents.tSurface = VK_NULL_HANDLE;
-    }
-
-    if(ptAppData->tContextComponents.tDevice != VK_NULL_HANDLE) {
-        vkDestroyDevice(ptAppData->tContextComponents.tDevice, NULL);
-        ptAppData->tContextComponents.tDevice = VK_NULL_HANDLE;
-    }
-
-    if(ptAppData->tContextComponents.tInstance != VK_NULL_HANDLE) 
-    {
-        vkDestroyInstance(ptAppData->tContextComponents.tInstance, NULL);
-        ptAppData->tContextComponents.tInstance = VK_NULL_HANDLE;
-    }
+    // note: GLFW window cleanup should be done separately by the application
 }
 
 void
@@ -974,14 +987,6 @@ hg_cleanup_swapchain_resources(hgAppData* ptState)
 }
 
 void 
-hg_destroy_pipeline(hgAppData* ptAppData, hgPipeline* tPipeline)
-{
-    if(tPipeline->tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline      (ptAppData->tContextComponents.tDevice, tPipeline->tPipeline, NULL);
-    if(tPipeline->tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptAppData->tContextComponents.tDevice, tPipeline->tPipelineLayout, NULL);
-
-};
-
-void 
 hg_destroy_texture(hgAppData* ptAppData, hgTexture* tTexture)
 {
     if(tTexture->tImageView != VK_NULL_HANDLE) vkDestroyImageView(ptAppData->tContextComponents.tDevice, tTexture->tImageView, NULL);
@@ -990,6 +995,28 @@ hg_destroy_texture(hgAppData* ptAppData, hgTexture* tTexture)
 
     memset(tTexture, 0, sizeof(hgTexture));
 }
+
+void
+hg_destroy_vertex_buffer(hgAppData* ptState, hgVertexBuffer* tVertexBuffer)
+{
+    if(tVertexBuffer->tBuffer != VK_NULL_HANDLE) vkDestroyBuffer(ptState->tContextComponents.tDevice, tVertexBuffer->tBuffer, NULL);
+    if(tVertexBuffer->tMemory != VK_NULL_HANDLE) vkFreeMemory(ptState->tContextComponents.tDevice, tVertexBuffer->tMemory, NULL);
+}
+
+void
+hg_destroy_index_buffer(hgAppData* ptState, hgIndexBuffer* tIndexBuffer)
+{
+    if(tIndexBuffer->tBuffer != VK_NULL_HANDLE) vkDestroyBuffer(ptState->tContextComponents.tDevice, tIndexBuffer->tBuffer, NULL);
+    if(tIndexBuffer->tMemory != VK_NULL_HANDLE) vkFreeMemory(ptState->tContextComponents.tDevice, tIndexBuffer->tMemory, NULL);
+}
+
+void 
+hg_destroy_pipeline(hgAppData* ptAppData, hgPipeline* tPipeline)
+{
+    if(tPipeline->tPipeline != VK_NULL_HANDLE)       vkDestroyPipeline      (ptAppData->tContextComponents.tDevice, tPipeline->tPipeline, NULL);
+    if(tPipeline->tPipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(ptAppData->tContextComponents.tDevice, tPipeline->tPipelineLayout, NULL);
+
+};
 
 // =============================================================================
 // INTERNAL HELPERS
@@ -1342,11 +1369,3 @@ hg_get_current_frame_cmd_buffer(hgAppData* ptState)
 {
     return ptState->tCommandComponents.tCommandBuffers[ptState->tCommandComponents.uCurrentImageIndex];
 }
-
-// -------------------------------
-// descriptor management
-// -------------------------------
-void hg_create_descriptor_set(hgAppData* ptAppData)
-{
-    // TODO: Implement descriptor set creation
-};

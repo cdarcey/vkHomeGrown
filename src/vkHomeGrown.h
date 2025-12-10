@@ -73,8 +73,9 @@ typedef struct _hgIndexBuffer
 
 typedef struct _hgPipeline
 {
-    VkPipeline       tPipeline;
-    VkPipelineLayout tPipelineLayout;
+    VkPipeline             tPipeline;
+    VkPipelineLayout       tPipelineLayout;
+    VkPipelineBindPoint    tPipelineBindPoint; // will always be VK_PIPELINE_BIND_POINT_GRAPHICS right now but leaving the door open to compute, raytracing, etc..
 } hgPipeline;
 
 // =============================================================================
@@ -103,11 +104,12 @@ typedef struct _hgPipelineConfig
     // rasterization state
     VkCullModeFlags     tCullMode;   // VK_CULL_MODE_NONE, _BACK_BIT, _FRONT_BIT
     VkFrontFace         tFrontFace;  // VK_FRONT_FACE_CLOCKWISE, _COUNTER_CLOCKWISE
-    VkPrimitiveTopology tTopology;   // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, etc.
 
     // descriptors
     VkDescriptorSetLayout* ptDescriptorSetLayouts;
     uint32_t               uDescriptorSetLayoutCount;
+
+    VkPipelineBindPoint    tPipelineBindPoint; // passthrough to hgPipeline
 
     // blend -> for future use 
     VkBool32 bBlendEnable;
@@ -213,8 +215,6 @@ void hg_recreate_swapchain(hgAppData* ptState);
 // buffers
 hgVertexBuffer hg_create_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride);
 hgIndexBuffer  hg_create_index_buffer(hgAppData* ptState, uint16_t* indices, uint32_t count);
-// TODO: void hg_destroy_vertex_buffer(hgAppData* ptState, hgVertexBuffer* buffer);
-// TODO: void hg_destroy_index_buffer(hgAppData* ptState, hgIndexBuffer* buffer);
 
 // textures
 unsigned char* hg_load_texture_data(const char* filename, int* widthOut, int* heightOut);
@@ -222,10 +222,10 @@ hgTexture      hg_create_texture(hgAppData* ptState, const unsigned char* data, 
 
 // pipelines
 hgPipeline hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* config);
-void       hg_destroy_pipeline(hgAppData* ptState, hgPipeline* pipeline);
 
-// descriptors (user manages these directly for now)
-// TODO: add descriptor helper functions if needed
+// descriptors 
+VkDescriptorPool hg_create_descriptor_pool(hgAppData* ptState, uint32_t uMaxSets, VkDescriptorPoolSize* atPoolSizes, uint32_t uPoolSizeCount);
+void             hg_update_texture_descriptor(hgAppData* ptState, VkDescriptorSet tDescriptorSet, uint32_t uBinding, hgTexture* tTexture, VkSampler tSampler);
 
 // =============================================================================
 // FRAME RENDERING
@@ -242,8 +242,8 @@ void hg_end_render_pass(hgAppData* ptState);
 
 
 // bind state (must be called between begin/end render pass)
+// may not do these functions as it doesnt really make sense to stash away the vulkan code on thses
 void hg_cmd_bind_pipeline(hgAppData* ptState, hgPipeline* tPipeline);
-// bind graphics pipeline (shaders, rasterization state, etc.)
 void hg_cmd_bind_vertex_buffer(hgAppData* ptState, hgVertexBuffer* tVertexBuffer);
 // bind vertex buffer for subsequent draw calls
 void hg_cmd_bind_index_buffer(hgAppData* ptState, hgIndexBuffer* tIndexBuffer);
@@ -266,9 +266,11 @@ void hg_draw_mesh(hgAppData* ptState, hgVertexBuffer* tVertexBuffer, hgIndexBuff
 // CLEANUP (Call at shutdown) -> will be replaced with more granular functions 
 // =============================================================================
 
-void hg_cleanup(hgAppData* ptState);
-
+void hg_core_cleanup(hgAppData* ptState); // should be called after all other cleanup
 void hg_cleanup_swapchain_resources(hgAppData* ptState); // for swapchain rebuilding on window resize
 void hg_destroy_texture(hgAppData* ptState, hgTexture* texture);
+void hg_destroy_vertex_buffer(hgAppData* ptState, hgVertexBuffer* tVertexBuffer);
+void hg_destroy_index_buffer(hgAppData* ptState, hgIndexBuffer* tIndexBuffer);
+void hg_destroy_pipeline(hgAppData* ptState, hgPipeline* tPipeline);
 
 #endif // VKHOMEGROWN_H

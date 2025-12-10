@@ -74,23 +74,12 @@ int main(void)
 
 
     // descriptors 
-    VkDescriptorPool      tDescPool            = VK_NULL_HANDLE;
+    VkDescriptorPoolSize tPoolSize = {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 50};
+    VkDescriptorPool     tDescPool = hg_create_descriptor_pool(&tState, 100, &tPoolSize, 1);
+
+
     VkDescriptorSetLayout tDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorSet       tDescriptorSet       = VK_NULL_HANDLE;
-
-    // desc pool
-    VkDescriptorPoolSize tDescPoolSize[] = {
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100},
-    };
-
-    const VkDescriptorPoolCreateInfo tDescPoolCreateInfo = {
-        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-        .maxSets       = 300,
-        .poolSizeCount = 1,
-        .pPoolSizes    = tDescPoolSize,
-    };
-    VULKAN_CHECK(vkCreateDescriptorPool(tState.tContextComponents.tDevice, &tDescPoolCreateInfo, NULL, &tDescPool));
 
     // sets and layouts
     VkDescriptorSetLayoutBinding tTextureAttachmentBinding = {
@@ -115,12 +104,14 @@ int main(void)
     };
     VULKAN_CHECK(vkAllocateDescriptorSets(tState.tContextComponents.tDevice, &tDescSetAllocInfo, &tDescriptorSet));
 
-    // texture loading and sampler creation
+    // texture loading 
     int iTextureHeight = 0;
     int iTextureWidth  = 0;
     unsigned char* pcTextureData = hg_load_texture_data("../textures/cobble.png", &iTextureWidth, &iTextureHeight);
     hgTexture tTestTexture = hg_create_texture(&tState, pcTextureData, iTextureWidth, iTextureHeight);
 
+    // sampler
+    VkSampler tTextureSampler;
     VkSamplerCreateInfo tSamplerInfo = {
         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .magFilter               = VK_FILTER_LINEAR,
@@ -139,27 +130,9 @@ int main(void)
         .minLod                  = 0.0f,
         .maxLod                  = 0.0f
     };
-    VkSampler tTextureSampler;
     vkCreateSampler(tState.tContextComponents.tDevice, &tSamplerInfo, NULL, &tTextureSampler);
 
-    // update descriptor set with texture
-    VkDescriptorImageInfo tImageInfo = {
-        .sampler     = tTextureSampler,
-        .imageView   = tTestTexture.tImageView,
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    };
-
-    VkWriteDescriptorSet tDescriptorWrite = {
-        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet          = tDescriptorSet,
-        .dstBinding      = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo      = &tImageInfo
-    };
-    vkUpdateDescriptorSets(tState.tContextComponents.tDevice, 1, &tDescriptorWrite, 0, NULL);
-
+    hg_update_texture_descriptor(&tState, tDescriptorSet, 0, &tTestTexture, tTextureSampler);
 
     // tests for new pipeline creation
     VkVertexInputAttributeDescription tTestVertAttribs[3] = {
@@ -177,11 +150,11 @@ int main(void)
         .bBlendEnable              = VK_FALSE,
         .tCullMode                 = VK_CULL_MODE_FRONT_BIT,
         .tFrontFace                = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        .tTopology                 = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .ptDescriptorSetLayouts    = &tDescriptorSetLayout,
         .uDescriptorSetLayoutCount = 1,
         .ptPushConstantRanges      = NULL,
-        .uPushConstantRangeCount   = 0
+        .uPushConstantRangeCount   = 0,
+        .tPipelineBindPoint        = VK_PIPELINE_BIND_POINT_GRAPHICS // for pipeline binding
     };
     hgPipeline tTestPipeline = hg_create_graphics_pipeline(&tState, &tTestConfig);
 
@@ -215,11 +188,11 @@ int main(void)
 
 
         // scene/ frame building -> testing stuff in here for now
-        vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
+        hg_cmd_bind_pipeline(&tState, &tTestPipeline);
+        // vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
         if(tDescriptorSet != VK_NULL_HANDLE) 
         {
-            vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                tTestPipeline.tPipelineLayout, 0, 1, &tDescriptorSet, 0, NULL);
+            vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipelineLayout, 0, 1, &tDescriptorSet, 0, NULL);
         }
         // bind vertex buffer
         VkDeviceSize offsets[] = {0};
@@ -233,11 +206,24 @@ int main(void)
 
     }
 
-
     // cleanup
     vkDeviceWaitIdle(tState.tContextComponents.tDevice);  // wait before cleanup
-    hg_destroy_texture(&tState, &tTestTexture);
-    hg_cleanup(&tState);
+
+    // destroy low level resources first 
+    hg_destroy_texture(&tState, &tTestTexture); // destroys image, image view, memory
+    hg_destroy_vertex_buffer(&tState, &tTestVertBuffer);
+    hg_destroy_index_buffer(&tState, &tTestIndBuffer);
+
+    // destroy pipeline 
+    hg_destroy_pipeline(&tState, &tTestPipeline); // destroys pipeline + pipeline layout
+
+    // vulkan clean up that have no helpers (the resources will be managed by the api user)
+    vkDestroyDescriptorPool(tState.tContextComponents.tDevice, tDescPool, NULL);
+    vkDestroyDescriptorSetLayout(tState.tContextComponents.tDevice, tDescriptorSetLayout, NULL);
+    vkDestroySampler(tState.tContextComponents.tDevice, tTextureSampler, NULL);
+
+    // should be called after all other cleanup
+    hg_core_cleanup(&tState);
     glfwDestroyWindow(window);
     glfwTerminate();
 
