@@ -151,7 +151,7 @@ typedef struct _hgRenderPipeline
     float          afClearColor[4];  // stored here for convenience
 } hgRenderPipeline;
 
-// command recording tools (per-frame)
+// command recording tools
 typedef struct _hgCommandResources
 {
     VkCommandPool    tCommandPool;
@@ -159,7 +159,7 @@ typedef struct _hgCommandResources
     uint32_t         uCurrentImageIndex;
 } hgCommandResources;
 
-// synch objects (per-frame)
+// synch objects
 typedef struct _hgFrameSync
 {
     VkSemaphore tImageAvailable;
@@ -170,12 +170,12 @@ typedef struct _hgFrameSync
 // main application state
 typedef struct _hgAppData
 {
-    // Window
+    // window
     GLFWwindow* pWindow;
     int         width;
     int         height;
 
-    // Vulkan subsystems
+    // vulkan subsystems
     hgVulkanContext    tContextComponents;
     hgSwapchain        tSwapchainComponents;
     hgRenderPipeline   tPipelineComponents;
@@ -184,7 +184,7 @@ typedef struct _hgAppData
 } hgAppData;
 
 // =============================================================================
-// INITIALIZATION & SETUP (Call once at startup)
+// INITIALIZATION & SETUP
 // =============================================================================
 
 void hg_create_instance(hgAppData* ptState, const char* pcAppName, uint32_t uAppVersion, bool bEnableValidation);
@@ -198,7 +198,7 @@ void hg_create_sync_objects(hgAppData* ptState);
 void hg_allocate_frame_cmd_buffers(hgAppData* ptState);
 
 // =============================================================================
-// SWAPCHAIN & RENDER PASS (recreate on window resize)
+// SWAPCHAIN & RENDER PASS
 // =============================================================================
 
 void hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR preferredPresentMode);

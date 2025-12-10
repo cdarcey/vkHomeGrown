@@ -24,12 +24,12 @@
 // INTERNAL API DECLARATIONS
 // =============================================================================
 
-// low-level buffer operations
+// low level buffer operations
 uint32_t hg_find_memory_type(hgVulkanContext* context, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 void     hg_create_buffer(hgVulkanContext* context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* memory);
 void     hg_copy_buffer(hgVulkanContext* context, hgCommandResources* commands, VkBuffer src, VkBuffer dst, VkDeviceSize size);
 
-// one-time command helpers
+// one time command helpers
 VkCommandBuffer hg_begin_single_time_commands(hgAppData* ptState);
 void            hg_end_single_time_commands(hgAppData* ptState, VkCommandBuffer cmdBuffer);
 
@@ -85,7 +85,7 @@ hg_create_instance(hgAppData* ptAppData, const char* pcAppName, uint32_t uAppVer
 void
 hg_create_surface(hgAppData* ptAppData) 
 {
-    // GLFW handles platform-specific surface creation
+    // GLFW handles platform specific surface creation
     VULKAN_CHECK(glfwCreateWindowSurface(
         ptAppData->tContextComponents.tInstance,
         ptAppData->pWindow,

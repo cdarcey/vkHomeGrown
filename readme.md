@@ -12,7 +12,7 @@
 
 A lightweight, educational Vulkan rendering framework written in C. Designed for learning graphics programming while providing practical, reusable abstractions over the Vulkan API.
 
-## 📑 Table of Contents
+## Table of Contents
 - [Overview](#overview)
 - [Features](#features)
 - [Getting Started](#getting-started)
@@ -24,7 +24,7 @@ A lightweight, educational Vulkan rendering framework written in C. Designed for
 - [Acknowledgments](#acknowledgments)
 - [Related Projects](#related-projects)
 
-## 📋 Overview
+## Overview
 
 **vkHomeGrown** is not a full game engine, but a minimalistic rendering layer that helps you understand Vulkan from the ground up. It provides sensible abstractions for common rendering tasks while keeping the Vulkan concepts visible and understandable.
 
@@ -34,7 +34,7 @@ Perfect for:
 - Understanding modern GPU APIs
 - Educational graphics programming projects
 
-## ✨ Features
+## Features
 
 - **Minimalistic API**     - Just enough abstraction to be useful, not enough to hide Vulkan's concepts
 - **Educational Design**   - Clear separation of concerns, well-commented code (at least I tried)
@@ -45,7 +45,7 @@ Perfect for:
 - **Descriptor Support**   - Texture sampling and uniform buffers
 - **Build System**         - Simple .bat setup for easy compilation
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - C compiler (GCC, Clang, or MSVC)
@@ -238,7 +238,7 @@ int main(void)
     hgPipelineConfig tTestConfig = {
         .pcVertexShaderPath        = "./shaders/vert.spv",
         .pcFragmentShaderPath      = "./shaders/frag.spv",
-        .uVertexStride             = sizeof(hgVertex),
+        .uVertexStride             = sizeof(float) * 8,
         .ptAttributeDescriptions   = tTestVertAttribs,
         .uAttributeCount           = 3,
         .bBlendEnable              = VK_FALSE,
@@ -311,7 +311,7 @@ int main(void)
 }
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 📁 vkHomeGrown/
@@ -328,7 +328,7 @@ int main(void)
 └── 📄 LICENSE           # MIT License
 ```
 
-## 🎓 Learning Resources
+## Learning Resources
 
 This project is designed to be educational. Key concepts covered:
 
@@ -339,7 +339,7 @@ This project is designed to be educational. Key concepts covered:
 5. **Command Recording** - Command buffers, render passes, synchronization
 6. **Resource Binding** - Descriptors, vertex/index buffers
 
-## 🔧 API Reference
+## API Reference
 
 ### Core Types
 - `hgAppData` - Main application state container
@@ -365,12 +365,12 @@ This project is designed to be educational. Key concepts covered:
 - `hg_begin_render_pass()` - Start rendering to framebuffer
 - `hg_end_render_pass()` - End rendering pass
 
-## 🎯 Example Projects
+## Example Projects
 
 coming soon...
 
 
-## ⚠️ Limitations
+## Limitations
 
 This is an educational project with some intentional limitations:
 
@@ -381,7 +381,7 @@ This is an educational project with some intentional limitations:
 - No advanced features (compute, ray tracing)
 
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - The Vulkan Working Group and Khronos Group
 - GLFW developers for excellent windowing library
@@ -390,7 +390,7 @@ This is an educational project with some intentional limitations:
 - Special thanks to [Jonathan Hoffstadt](https://github.com/hoffstadt) 
 
 
-## 🔗 Related Projects
+## Related Projects
 
 - [Vulkan Tutorial](https://vulkan-tutorial.com/) - Great learning resource
 - [GLFW](https://www.glfw.org/) - Window and input management
