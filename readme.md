@@ -39,7 +39,6 @@ Perfect for:
 - **Minimalistic API**     - Just enough abstraction to be useful, not enough to hide Vulkan's concepts
 - **Educational Design**   - Clear separation of concerns, well-commented code (at least I tried)
 - **Modern C**             - Clean, readable code following consistent patterns
-- **GLFW Integration**     - Cross-platform window management
 - **Resource Management**  - Vertex buffers, index buffers, textures, pipelines
 - **Swapchain Management** - Automatic recreation on window resize
 - **Descriptor Support**   - Texture sampling and uniform buffers
@@ -58,7 +57,6 @@ Perfect for:
 # Still working on a more portable solution (I use a custom batch file)
 # Clone the repository
 git clone https://github.com/username/vkHomeGrown.git
-cd vkHomeGrown
 
 ```
 

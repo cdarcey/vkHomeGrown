@@ -12,7 +12,7 @@
 @pushd %~dp0
 
 @set PROJECT_ROOT=..
-@set SHADER_DIR=%PROJECT_ROOT%/shaders
+@set SHADER_DIR=shaders
 @set OUTPUT_DIR=%PROJECT_ROOT%/out
 @set DEPENDENCIES_DIR=%PROJECT_ROOT%/dependencies
 
@@ -40,28 +40,54 @@
 
 @echo [1m[36mCompiling shaders...[0m
 
-@if exist "%SHADER_DIR%/simple.vert" (
+@if exist "%SHADER_DIR%/textured.vert" (
     @echo Compiling vertex shader...
-    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/simple.vert" -o "%OUTPUT_DIR%/shaders/vert.spv"
+    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/textured.vert" -o "%OUTPUT_DIR%/shaders/textured_vert.spv"
     @if %ERRORLEVEL% NEQ 0 (
         @echo [91mFailed to compile vertex shader[0m
         @goto ShaderError
     )
 ) else (
-    @echo [91mError: simple.vert not found at %SHADER_DIR%/simple.vert[0m
+    @echo [91mError: textured.vert not found at %SHADER_DIR%/textured.vert[0m
     @dir "%SHADER_DIR%"
     @goto ShaderError
 )
 
-@if exist "%SHADER_DIR%/simple.frag" (
+@if exist "%SHADER_DIR%/textured.frag" (
     @echo Compiling fragment shader...
-    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/simple.frag" -o "%OUTPUT_DIR%/shaders/frag.spv"
+    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/textured.frag" -o "%OUTPUT_DIR%/shaders/textured_frag.spv"
     @if %ERRORLEVEL% NEQ 0 (
         @echo [91mFailed to compile fragment shader[0m
         @goto ShaderError
     )
 ) else (
-    @echo [91mError: simple.frag not found at %SHADER_DIR%/simple.frag[0m
+    @echo [91mError: textured.frag not found at %SHADER_DIR%/textured.frag[0m
+    @dir "%SHADER_DIR%"
+    @goto ShaderError
+)
+
+@if exist "%SHADER_DIR%/not_textured.vert" (
+    @echo Compiling vertex shader...
+    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/not_textured.vert" -o "%OUTPUT_DIR%/shaders/not_textured_vert.spv"
+    @if %ERRORLEVEL% NEQ 0 (
+        @echo [91mFailed to compile vertex shader[0m
+        @goto ShaderError
+    )
+) else (
+    @echo [91mError: not_textured.vert not found at %SHADER_DIR%/not_textured.vert[0m
+    @dir "%SHADER_DIR%"
+    @goto ShaderError
+)
+
+@if exist "%SHADER_DIR%/not_textured.frag" (
+    @echo Compiling fragment shader...
+    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/not_textured.frag" -o "%OUTPUT_DIR%/shaders/not_textured_frag.spv"
+    @if %ERRORLEVEL% NEQ 0 (
+        @echo [91mFailed to compile fragment shader[0m
+        @goto ShaderError
+    )
+) else (
+    @echo [91mError: not_textured.frag not found at %SHADER_DIR%/not_textured.frag[0m
     @dir "%SHADER_DIR%"
     @goto ShaderError
 )

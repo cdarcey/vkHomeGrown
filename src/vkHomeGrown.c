@@ -1306,38 +1306,25 @@ hg_upload_to_image(hgAppData* ptAppData, VkImage tImage, const unsigned char* pD
 VkShaderModule 
 hg_create_shader_module(hgAppData* ptAppData, const char* pcFilename) 
 {
-    // TODO: clean up paths
-    const char* apcPossiblePaths[] = {
-        pcFilename,                         // absolute path
-        "../out/shaders/vert.spv",          // relative from src folder
-        "../../out/shaders/vert.spv",       // relative if running from project root
-        "out/shaders/vert.spv",             // relative if running from project root
-        NULL
-    };
-
-    FILE* pFile = NULL;
-    const char* pcFoundPath = NULL;
-
-    for(int i = 0; apcPossiblePaths[i] != NULL; i++) 
-    {
-        pFile = fopen(apcPossiblePaths[i], "rb");
-        if(pFile) 
-        {
-            pcFoundPath = apcPossiblePaths[i];
-            printf("Found shader at: %s\n", pcFoundPath);
-            break;
-        }
-    }
-
+    FILE* pFile = fopen(pcFilename, "rb");
     if(!pFile) 
     {
-        printf("Failed to open shader file: %s\n", pcFilename);
-        printf("Tried paths:\n");
-        for(int i = 0; apcPossiblePaths[i] != NULL; i++) 
+        // try one fallback location
+        char szFallbackPath[256];
+        snprintf(szFallbackPath, sizeof(szFallbackPath), "../out/shaders/%s", pcFilename);
+        pFile = fopen(szFallbackPath, "rb");
+
+        if(!pFile) 
         {
-            printf("  %s\n", apcPossiblePaths[i]);
+            printf("Failed to open shader file: %s\n", pcFilename);
+            printf("Also tried: %s\n", szFallbackPath);
+            return VK_NULL_HANDLE;
         }
-        return VK_NULL_HANDLE;
+        printf("Found shader at: %s\n", szFallbackPath);
+    }
+    else
+    {
+        printf("Found shader at: %s\n", pcFilename);
     }
 
     fseek(pFile, 0, SEEK_END);

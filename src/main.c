@@ -5,6 +5,11 @@
 
 int main(void) 
 {
+
+    // example settings
+    bool bQuad     = true;
+    bool bTextured = false;
+
     // init GLFW
     if (!glfwInit()) 
     {
@@ -44,16 +49,25 @@ int main(void)
 
 
     // test vertex & index data
-    float fTestVertices[] = {
+    float fTestVerticesQuad[] = {
         // x, y,      r, g, b, a,             u, v
-        -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,  // bottom-left  -> red
-         0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f,  // bottom-right -> green
-         0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // top-right    -> blue
-        -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f   // top-left     -> yellow
+        -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,   // top left     -> red
+        -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,   // bottom left  -> yellow
+         0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // bottom right -> blue
+         0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f    // top right    -> green
+
+
     };
     uint16_t uTestIndices[6] = {
-        0, 1, 2,  // first triangle  (BL, BR, TR)
-        2, 3, 0   // second triangle (TR, TL, BL)
+        0, 1, 2,  // first triangle  (TL, BL, BR)
+        2, 3, 0   // second triangle (BR, TR, TL)
+    };
+
+    float fTestVerticesTriangle[] = {
+        // x, y,      r, g, b, a,              u, v
+         0.0f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.0f,   // top          -> red
+        -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,   // bottom left  -> green
+         0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // bottom right -> blue
     };
 
 
@@ -69,8 +83,9 @@ int main(void)
     hg_create_framebuffers(&tState);
     hg_create_command_pool(&tState);
 
-    hgVertexBuffer tTestVertBuffer = hg_create_vertex_buffer(&tState, fTestVertices, sizeof(fTestVertices), sizeof(float) * 8);
-    hgIndexBuffer  tTestIndBuffer  = hg_create_index_buffer(&tState, uTestIndices, 6);
+    hgVertexBuffer fTestVertBufferQuad     = hg_create_vertex_buffer(&tState, fTestVerticesQuad, sizeof(fTestVerticesQuad), sizeof(float) * 8);
+    hgVertexBuffer fTestVertBufferTriangle = hg_create_vertex_buffer(&tState, fTestVerticesTriangle, sizeof(fTestVerticesTriangle), sizeof(float) * 8);
+    hgIndexBuffer  tTestIndBuffer        = hg_create_index_buffer(&tState, uTestIndices, 6);
 
 
     // descriptors 
@@ -142,16 +157,16 @@ int main(void)
     };
 
     hgPipelineConfig tTestConfig = {
-        .pcVertexShaderPath        = "./shaders/vert.spv",
-        .pcFragmentShaderPath      = "./shaders/frag.spv",
+        .pcVertexShaderPath = bTextured ? "../out/shaders/textured_vert.spv" : "../out/shaders/not_textured_vert.spv",
+        .pcFragmentShaderPath = bTextured ? "../out/shaders/textured_frag.spv" : "../out/shaders/not_textured_frag.spv",
         .uVertexStride             = sizeof(float) * 8,
         .ptAttributeDescriptions   = tTestVertAttribs,
         .uAttributeCount           = 3,
         .bBlendEnable              = VK_FALSE,
-        .tCullMode                 = VK_CULL_MODE_FRONT_BIT,
+        .tCullMode                 = VK_CULL_MODE_BACK_BIT,
         .tFrontFace                = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        .ptDescriptorSetLayouts    = &tDescriptorSetLayout,
-        .uDescriptorSetLayoutCount = 1,
+        .ptDescriptorSetLayouts    = bTextured ? &tDescriptorSetLayout : NULL,
+        .uDescriptorSetLayoutCount = bTextured ? 1 : 0,
         .ptPushConstantRanges      = NULL,
         .uPushConstantRangeCount   = 0,
         .tPipelineBindPoint        = VK_PIPELINE_BIND_POINT_GRAPHICS // for pipeline binding
@@ -162,6 +177,8 @@ int main(void)
 
     // command buffer creation and recording
     hg_allocate_frame_cmd_buffers(&tState);
+
+
 
     // main loop
     while (!glfwWindowShouldClose(window)) 
@@ -186,20 +203,28 @@ int main(void)
         uint32_t uImageIndex = hg_begin_frame(&tState);
         hg_begin_render_pass(&tState, uImageIndex);
 
-
         // scene/ frame building -> testing stuff in here for now
         hg_cmd_bind_pipeline(&tState, &tTestPipeline);
         // vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
-        if(tDescriptorSet != VK_NULL_HANDLE) 
+        if(bTextured) // apply texture 
         {
             vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipelineLayout, 0, 1, &tDescriptorSet, 0, NULL);
         }
-        // bind vertex buffer
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[uImageIndex], 0, 1, &tTestVertBuffer.tBuffer, offsets);
-        vkCmdBindIndexBuffer(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.tBuffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdDrawIndexed(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.uIndexCount, 1, 0, 0, 0);
 
+        if(bQuad) // render quad
+        {
+            // bind vertex buffer
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[uImageIndex], 0, 1, &fTestVertBufferQuad.tBuffer, offsets);
+            vkCmdBindIndexBuffer(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.tBuffer, 0, VK_INDEX_TYPE_UINT16);
+            vkCmdDrawIndexed(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.uIndexCount, 1, 0, 0, 0);
+        }
+        else // render triangle
+        {
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[uImageIndex], 0, 1, &fTestVertBufferTriangle.tBuffer, offsets);
+            vkCmdDraw(tState.tCommandComponents.tCommandBuffers[uImageIndex], 3, 1, 0, 0);
+        }
         // end frame 
         hg_end_render_pass(&tState);
         hg_end_frame(&tState, tState.tCommandComponents.uCurrentImageIndex);
@@ -211,7 +236,8 @@ int main(void)
 
     // destroy low level resources first 
     hg_destroy_texture(&tState, &tTestTexture); // destroys image, image view, memory
-    hg_destroy_vertex_buffer(&tState, &tTestVertBuffer);
+    hg_destroy_vertex_buffer(&tState, &fTestVertBufferQuad);
+    hg_destroy_vertex_buffer(&tState, &fTestVertBufferTriangle);
     hg_destroy_index_buffer(&tState, &tTestIndBuffer);
 
     // destroy pipeline 
