@@ -43,7 +43,7 @@ typedef struct _hgVertex
 {
     float x, y, z;    // position
     float r, g, b, a; // color
-    // float u, v;       // texture coords TODO: 
+    float u, v;       // texture coords 
 } hgVertex;
 
 typedef struct _hgTexture
@@ -96,7 +96,6 @@ typedef struct _hgRenderPassConfig
     VkAttachmentLoadOp  tLoadOp;
     VkAttachmentStoreOp tStoreOp;
     float               afClearColor[4];
-    // bool                bDepthAttachment; for future use 
 } hgRenderPassConfig;
 
 typedef struct _hgPipelineConfig
@@ -159,7 +158,15 @@ typedef struct _hgRenderPipeline
 {
     VkRenderPass   tRenderPass;
     VkFramebuffer* tFramebuffers;
-    float          afClearColor[4];  // stored here for convenience
+
+    // depth attachments 
+    VkImage        tDepthImage;
+    VkDeviceMemory tDepthMemory;
+    VkImageView    tDepthImageView;
+    VkFormat       tDepthFormat;  // store the format we choose
+
+    float          afClearColor[4];   // stored here for convenience
+    float          afStencilClear[2];
 } hgRenderPipeline;
 
 // command recording tools
@@ -192,6 +199,9 @@ typedef struct _hgAppData
     hgRenderPipeline   tPipelineComponents;
     hgCommandResources tCommandComponents;
     hgFrameSync        tSyncComponents;
+
+    // settings
+    bool bDepthEnabled; // should be set on intialization 
 } hgAppData;
 
 // =============================================================================
@@ -216,6 +226,7 @@ void hg_create_swapchain(hgAppData* ptState, VkPresentModeKHR preferredPresentMo
 void hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* config);
 void hg_create_framebuffers(hgAppData* ptState);
 void hg_recreate_swapchain(hgAppData* ptState);
+void hg_create_depth_resources(hgAppData* ptState);
 
 // =============================================================================
 // RESOURCE CREATION

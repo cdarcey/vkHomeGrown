@@ -43,6 +43,9 @@ VkShaderModule hg_create_shader_module(hgAppData* ptState, const char* filename)
 // command buffer access
 VkCommandBuffer hg_get_current_frame_cmd_buffer(hgAppData* ptState);
 
+// depth buffers
+VkFormat hg_find_depth_format(hgAppData* ptState);
+
 // =============================================================================
 // INITIALIZATION & SETUP (Call once at startup)
 // =============================================================================
@@ -321,13 +324,21 @@ hg_create_swapchain(hgAppData* ptAppData, VkPresentModeKHR tPreferredPresentMode
 }
 
 void 
-hg_create_render_pass(hgAppData* ptAppData, hgRenderPassConfig* ptConfig)
+hg_create_render_pass(hgAppData* ptState, hgRenderPassConfig* ptConfig)
 {
     // set clear color from config
-    memcpy(ptAppData->tPipelineComponents.afClearColor, &ptConfig->afClearColor, sizeof(float) * 4);
+    memcpy(ptState->tPipelineComponents.afClearColor, &ptConfig->afClearColor, sizeof(float) * 4);
 
+    // only check for depth format if it is enabled
+    if(ptState->bDepthEnabled)
+    {
+        VkFormat tDepthFormat = hg_find_depth_format(ptState);
+        ptState->tPipelineComponents.tDepthFormat = tDepthFormat;
+    }
+
+    // color attchment 
     VkAttachmentDescription tColorAttachment = {
-        .format         = ptAppData->tSwapchainComponents.tFormat,
+        .format         = ptState->tSwapchainComponents.tFormat,
         .samples        = VK_SAMPLE_COUNT_1_BIT,
         .loadOp         = ptConfig->tLoadOp,
         .storeOp        = ptConfig->tStoreOp,
@@ -336,78 +347,177 @@ hg_create_render_pass(hgAppData* ptAppData, hgRenderPassConfig* ptConfig)
         .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
     };
+    // depth attachment 
+    VkAttachmentDescription tDepthAttachment = {
+        .format         = ptState->tPipelineComponents.tDepthFormat,
+        .samples        = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE,  // don't need to store depth after rendering
+        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
 
+    // attchment references
     VkAttachmentReference tColorAttachmentRef = {
         .attachment = 0,
         .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
     };
+    VkAttachmentReference tDepthAttachmentRef = {
+        .attachment = 1,
+        .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
 
     VkSubpassDescription tSubpass = {
-        .pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments    = &tColorAttachmentRef
+        .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount    = 1,
+        .pColorAttachments       = &tColorAttachmentRef,
+        .pDepthStencilAttachment = ptState->bDepthEnabled ? &tDepthAttachmentRef : NULL
     };
+
+    // Array of both attachments
+    VkAttachmentDescription tAttachmentsWithDepth[] = {tColorAttachment, tDepthAttachment};
 
     VkRenderPassCreateInfo tRenderPassInfo = {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments    = &tColorAttachment,
+        .attachmentCount = ptState->bDepthEnabled ? 2 : 1,  // set to 2 if depth attchment is being used else set to 1 for just color attchment
+        .pAttachments    = ptState->bDepthEnabled ? tAttachmentsWithDepth : &tColorAttachment, // if depth enable pass array else pass just color attchment 
         .subpassCount    = 1,
         .pSubpasses      = &tSubpass
     };
-
-    VULKAN_CHECK(vkCreateRenderPass(ptAppData->tContextComponents.tDevice, &tRenderPassInfo, NULL, &ptAppData->tPipelineComponents.tRenderPass));
+    VULKAN_CHECK(vkCreateRenderPass(ptState->tContextComponents.tDevice, &tRenderPassInfo, NULL, &ptState->tPipelineComponents.tRenderPass));
 }
 
 void 
-hg_create_framebuffers(hgAppData* ptAppData) 
+hg_create_framebuffers(hgAppData* ptState) 
 {
-    ptAppData->tPipelineComponents.tFramebuffers = malloc(ptAppData->tSwapchainComponents.uSwapchainImageCount * sizeof(VkFramebuffer));
+    ptState->tPipelineComponents.tFramebuffers = malloc(ptState->tSwapchainComponents.uSwapchainImageCount * sizeof(VkFramebuffer));
 
-    for(uint32_t i = 0; i < ptAppData->tSwapchainComponents.uSwapchainImageCount; i++) 
+    for(uint32_t i = 0; i < ptState->tSwapchainComponents.uSwapchainImageCount; i++) 
     {
-        VkImageView attachments[] = {ptAppData->tSwapchainComponents.tSwapchainImageViews[i]};
+        VkImageView* ptAttachments;
+        uint32_t uAttachmentCount;
 
-        VkFramebufferCreateInfo tFramebufferInfo = {
+        if (ptState->bDepthEnabled) // with depth enabled 
+        {
+            // Double-check depth image view exists
+            assert(ptState->tPipelineComponents.tDepthImageView != VK_NULL_HANDLE);
+            VkImageView tAttachmentsWithDepth[] = {
+                ptState->tSwapchainComponents.tSwapchainImageViews[i],
+                ptState->tPipelineComponents.tDepthImageView
+            };
+            ptAttachments = tAttachmentsWithDepth;
+            uAttachmentCount = 2;
+        }
+        else // with depth diabled
+        {
+            VkImageView tAttachmentsNoDepth[] = {ptState->tSwapchainComponents.tSwapchainImageViews[i]};
+            ptAttachments = tAttachmentsNoDepth;
+            uAttachmentCount = 1;
+        }
+
+        VkFramebufferCreateInfo framebufferInfo = {
             .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass      = ptAppData->tPipelineComponents.tRenderPass,
-            .attachmentCount = 1,
-            .pAttachments    = attachments,
-            .width           = ptAppData->tSwapchainComponents.tExtent.width,
-            .height          = ptAppData->tSwapchainComponents.tExtent.height,
+            .renderPass      = ptState->tPipelineComponents.tRenderPass,
+            .attachmentCount = uAttachmentCount,
+            .pAttachments    = ptAttachments,
+            .width           = ptState->tSwapchainComponents.tExtent.width,
+            .height          = ptState->tSwapchainComponents.tExtent.height,
             .layers          = 1
         };
-
-        VULKAN_CHECK(vkCreateFramebuffer(ptAppData->tContextComponents.tDevice, &tFramebufferInfo, NULL, &ptAppData->tPipelineComponents.tFramebuffers[i]));
+        VULKAN_CHECK(vkCreateFramebuffer(ptState->tContextComponents.tDevice, &framebufferInfo, NULL, &ptState->tPipelineComponents.tFramebuffers[i]));
     }
 }
 
-void
-hg_recreate_swapchain(hgAppData* ptState)
+void hg_recreate_swapchain(hgAppData* ptState)
 {
-    // wait for device to be idle before destroying resources then clean up old resources
+    // wait for device to be idle
     vkDeviceWaitIdle(ptState->tContextComponents.tDevice);
+
+    // cleanup old swapchain resources 
     hg_cleanup_swapchain_resources(ptState);
 
-    // get new window dimensions (GLFW handles) && handle minimization (window size is 0)
-    int newWidth = 0, newHeight = 0;
-    glfwGetFramebufferSize(ptState->pWindow, &newWidth, &newHeight);
-    while (newWidth == 0 || newHeight == 0) 
+    // get new window dimensions
+    int iNewWidth = 0, iNewHeight = 0;
+    glfwGetFramebufferSize(ptState->pWindow, &iNewWidth, &iNewHeight);
+    while (iNewWidth == 0 || iNewHeight == 0) 
     {
-        glfwGetFramebufferSize(ptState->pWindow, &newWidth, &newHeight);
+        glfwGetFramebufferSize(ptState->pWindow, &iNewWidth, &iNewHeight);
         glfwWaitEvents();
     }
 
     // recreate swapchain with new size
-    hg_create_swapchain(ptState, VK_PRESENT_MODE_FIFO_KHR);
+    hg_create_swapchain(ptState, VK_PRESENT_MODE_FIFO_KHR); // TODO: pass in VkPresentModeKHR that was set in config struct
 
-    // recreate all swapchain dependent resources
-    hg_create_framebuffers(ptState);        // framebuffers depend on swapchain images
-    hg_allocate_frame_cmd_buffers(ptState); // command buffers should be recreated
+    if (ptState->bDepthEnabled) // recreate depth resources if depth is enabled
+    {
+        hg_create_depth_resources(ptState);
+    }
 
-    // update state with new dimensions
-    ptState->width = newWidth;
-    ptState->height = newHeight;
+    // recreate framebuffers & frame command buffers
+    hg_create_framebuffers(ptState);
+    hg_allocate_frame_cmd_buffers(ptState);
+
+    // Update state with new dimensions
+    ptState->width  = iNewWidth;
+    ptState->height = iNewHeight;
+}
+
+void
+hg_create_depth_resources(hgAppData* ptState)
+{
+    // find supported format
+    VkFormat tDepthFormat = hg_find_depth_format(ptState);
+    ptState->tPipelineComponents.tDepthFormat = tDepthFormat;
+
+    // create depth image
+    VkImageCreateInfo tImageInfo = {
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .extent = {
+            .width     = ptState->tSwapchainComponents.tExtent.width,
+            .height    = ptState->tSwapchainComponents.tExtent.height,
+            .depth     = 1
+        },
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .format        = tDepthFormat,
+        .tiling        = VK_IMAGE_TILING_OPTIMAL,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .usage         = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE
+    };
+    VULKAN_CHECK(vkCreateImage(ptState->tContextComponents.tDevice, &tImageInfo, NULL, &ptState->tPipelineComponents.tDepthImage));
+
+    // allocate memory for depth image
+    VkMemoryRequirements tMemRequirements;
+    vkGetImageMemoryRequirements(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tDepthImage, &tMemRequirements);
+
+    VkMemoryAllocateInfo tAllocInfo = {
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = tMemRequirements.size,
+        .memoryTypeIndex = hg_find_memory_type(&ptState->tContextComponents, tMemRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
+    VULKAN_CHECK(vkAllocateMemory(ptState->tContextComponents.tDevice, &tAllocInfo, NULL, &ptState->tPipelineComponents.tDepthMemory));
+    VULKAN_CHECK(vkBindImageMemory(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tDepthImage, ptState->tPipelineComponents.tDepthMemory, 0));
+
+    // create image view
+    VkImageViewCreateInfo tViewInfo = {
+        .sType              = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image              = ptState->tPipelineComponents.tDepthImage,
+        .viewType           = VK_IMAGE_VIEW_TYPE_2D,
+        .format             = tDepthFormat,
+        .subresourceRange   = {
+            .aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+    VULKAN_CHECK(vkCreateImageView(ptState->tContextComponents.tDevice, &tViewInfo, NULL, &ptState->tPipelineComponents.tDepthImageView));
 }
 
 // =============================================================================
@@ -565,11 +675,11 @@ hg_create_texture(hgAppData* ptAppData, const unsigned char* pucData, int iWidth
 // pipelines
 // -------------------------------
 hgPipeline
-hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
+hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* ptConfig)
 {
     // create shader modules
-    VkShaderModule tVertShaderModule = hg_create_shader_module(ptAppData, ptConfig->pcVertexShaderPath);
-    VkShaderModule tFragShaderModule = hg_create_shader_module(ptAppData, ptConfig->pcFragmentShaderPath);
+    VkShaderModule tVertShaderModule = hg_create_shader_module(ptState, ptConfig->pcVertexShaderPath);
+    VkShaderModule tFragShaderModule = hg_create_shader_module(ptState, ptConfig->pcFragmentShaderPath);
 
     VkPipelineShaderStageCreateInfo tVertShaderStageInfo = {
         .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -610,15 +720,15 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
     VkViewport tViewport = {
         .x        = 0.0f,
         .y        = 0.0f,
-        .width    = (float)ptAppData->tSwapchainComponents.tExtent.width,
-        .height   = (float)ptAppData->tSwapchainComponents.tExtent.height,
+        .width    = (float)ptState->tSwapchainComponents.tExtent.width,
+        .height   = (float)ptState->tSwapchainComponents.tExtent.height,
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
 
     VkRect2D tScissor = {
         .offset = {0, 0},
-        .extent = ptAppData->tSwapchainComponents.tExtent
+        .extent = ptState->tSwapchainComponents.tExtent
     };
 
     VkPipelineViewportStateCreateInfo tViewportState = {
@@ -675,8 +785,17 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
     hgPipeline tPipelineResult = {0};
     tPipelineResult.tPipelineBindPoint = ptConfig->tPipelineBindPoint;
 
-    VULKAN_CHECK(vkCreatePipelineLayout(ptAppData->tContextComponents.tDevice, &tPipelineLayoutInfo, NULL, 
-            &tPipelineResult.tPipelineLayout));
+    VULKAN_CHECK(vkCreatePipelineLayout(ptState->tContextComponents.tDevice, &tPipelineLayoutInfo, NULL, &tPipelineResult.tPipelineLayout));
+
+
+    VkPipelineDepthStencilStateCreateInfo tDepthStencil = {
+        .sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable       = VK_TRUE,
+        .depthWriteEnable      = VK_TRUE,
+        .depthCompareOp        = VK_COMPARE_OP_LESS,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable     = VK_FALSE
+    };
 
     // create graphics pipeline
     VkGraphicsPipelineCreateInfo tPipelineInfo = {
@@ -689,20 +808,23 @@ hg_create_graphics_pipeline(hgAppData* ptAppData, hgPipelineConfig* ptConfig)
         .pRasterizationState = &tRasterizer,
         .pMultisampleState   = &tMultisampling,
         .pColorBlendState    = &tColorBlending,
-        .pDepthStencilState  = NULL, // TODO: do we want this in the future?
+        .pDepthStencilState  = NULL,
         .layout              = tPipelineResult.tPipelineLayout,
-        .renderPass          = ptAppData->tPipelineComponents.tRenderPass,
+        .renderPass          = ptState->tPipelineComponents.tRenderPass,
         .subpass             = 0,
         .basePipelineHandle  = VK_NULL_HANDLE,
         .basePipelineIndex   = -1
     };
 
-    VULKAN_CHECK(vkCreateGraphicsPipelines(ptAppData->tContextComponents.tDevice, 
-            VK_NULL_HANDLE, 1, &tPipelineInfo, NULL, &tPipelineResult.tPipeline));
+    // if depth is enabled pass in VkPipelineDepthStencilStateCreateInfo
+    if(ptState->bDepthEnabled) tPipelineInfo.pDepthStencilState = &tDepthStencil;
+
+    VULKAN_CHECK(vkCreateGraphicsPipelines(ptState->tContextComponents.tDevice, VK_NULL_HANDLE, 1, &tPipelineInfo, 
+            NULL, &tPipelineResult.tPipeline));
 
     // cleanup shader modules
-    vkDestroyShaderModule(ptAppData->tContextComponents.tDevice, tVertShaderModule, NULL);
-    vkDestroyShaderModule(ptAppData->tContextComponents.tDevice, tFragShaderModule, NULL);
+    vkDestroyShaderModule(ptState->tContextComponents.tDevice, tVertShaderModule, NULL);
+    vkDestroyShaderModule(ptState->tContextComponents.tDevice, tFragShaderModule, NULL);
 
     return tPipelineResult;
 }
@@ -860,33 +982,61 @@ hg_end_frame(hgAppData* ptState, uint32_t uImageIndex)
 // -------------------------------
 // render pass
 // -------------------------------
+
 void 
 hg_begin_render_pass(hgAppData* ptState, uint32_t uImageIndex) 
 {
-    // get command buffer
     VkCommandBuffer tCommandBuffer = hg_get_current_frame_cmd_buffer(ptState);
+    if (ptState->bDepthEnabled) 
+    {
+        // with depth
+        // color clear values 
+        VkClearValue tClearValues[2];
+        tClearValues[0].color.float32[0] = ptState->tPipelineComponents.afClearColor[0];
+        tClearValues[0].color.float32[1] = ptState->tPipelineComponents.afClearColor[1];
+        tClearValues[0].color.float32[2] = ptState->tPipelineComponents.afClearColor[2];
+        tClearValues[0].color.float32[3] = ptState->tPipelineComponents.afClearColor[3];
 
-    // grab clear color from state
-    VkClearValue clearColor = {{{
-        ptState->tPipelineComponents.afClearColor[0],
-        ptState->tPipelineComponents.afClearColor[1],
-        ptState->tPipelineComponents.afClearColor[2],
-        ptState->tPipelineComponents.afClearColor[3]
-    }}};
+        // depth clear values
+        tClearValues[1].depthStencil.depth = 1.0f;
+        tClearValues[1].depthStencil.stencil = 0;
 
-    // begin render pass
-    VkRenderPassBeginInfo renderPassInfo = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = ptState->tPipelineComponents.tRenderPass,
-        .framebuffer = ptState->tPipelineComponents.tFramebuffers[uImageIndex],
-        .renderArea = {
-            .offset = {0, 0},
-            .extent = ptState->tSwapchainComponents.tExtent
-        },
-        .clearValueCount = 1,
-        .pClearValues = &clearColor
-    };
-    vkCmdBeginRenderPass(tCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        VkRenderPassBeginInfo tRenderPassInfo = {
+            .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass      = ptState->tPipelineComponents.tRenderPass,
+            .framebuffer     = ptState->tPipelineComponents.tFramebuffers[uImageIndex],
+            .renderArea      = {
+                .offset      = {0, 0},
+                .extent      = ptState->tSwapchainComponents.tExtent
+            },
+            .clearValueCount = 2,
+            .pClearValues    = tClearValues
+        };
+        vkCmdBeginRenderPass(tCommandBuffer, &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    }
+    else 
+    {
+        // without depth
+        VkClearValue tClearColor = {{{
+            ptState->tPipelineComponents.afClearColor[0],
+            ptState->tPipelineComponents.afClearColor[1],
+            ptState->tPipelineComponents.afClearColor[2],
+            ptState->tPipelineComponents.afClearColor[3]
+        }}};
+
+        VkRenderPassBeginInfo tRenderPassInfo = {
+            .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass      = ptState->tPipelineComponents.tRenderPass,
+            .framebuffer     = ptState->tPipelineComponents.tFramebuffers[uImageIndex],
+            .renderArea      = {
+                .offset      = {0, 0},
+                .extent      = ptState->tSwapchainComponents.tExtent
+            },
+            .clearValueCount = 1,
+            .pClearValues    = &tClearColor
+        };
+        vkCmdBeginRenderPass(tCommandBuffer, &tRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    }
 }
 
 void
@@ -993,6 +1143,26 @@ hg_core_cleanup(hgAppData* ptState)
 void
 hg_cleanup_swapchain_resources(hgAppData* ptState) 
 {
+    if(ptState->bDepthEnabled) // only if depth is enabled
+    {
+        // destroy depth resources FIRST
+        if (ptState->tPipelineComponents.tDepthImageView != VK_NULL_HANDLE) 
+        {
+            vkDestroyImageView(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tDepthImageView, NULL);
+            ptState->tPipelineComponents.tDepthImageView = VK_NULL_HANDLE;
+        }
+        if (ptState->tPipelineComponents.tDepthImage != VK_NULL_HANDLE) 
+        {
+            vkDestroyImage(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tDepthImage, NULL);
+            ptState->tPipelineComponents.tDepthImage = VK_NULL_HANDLE;
+        }
+        if (ptState->tPipelineComponents.tDepthMemory != VK_NULL_HANDLE) 
+        {
+            vkFreeMemory(ptState->tContextComponents.tDevice, ptState->tPipelineComponents.tDepthMemory, NULL);
+            ptState->tPipelineComponents.tDepthMemory = VK_NULL_HANDLE;
+        }
+    }
+
     // free command buffers
     if (ptState->tCommandComponents.tCommandBuffers) {
         vkFreeCommandBuffers(ptState->tContextComponents.tDevice, ptState->tCommandComponents.tCommandPool, 
@@ -1401,3 +1571,34 @@ hg_get_current_frame_cmd_buffer(hgAppData* ptState)
 {
     return ptState->tCommandComponents.tCommandBuffers[ptState->tCommandComponents.uCurrentImageIndex];
 }
+
+// -------------------------------
+// depth buffers
+// -------------------------------
+
+VkFormat 
+hg_find_depth_format(hgAppData* ptState)
+{
+    // try formats in order of preference
+    VkFormat tCandidates[] = {
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+        VK_FORMAT_D24_UNORM_S8_UINT
+    };
+
+    for (int i = 0; i < 3; i++) 
+    {
+        VkFormatProperties tProps;
+        vkGetPhysicalDeviceFormatProperties(ptState->tContextComponents.tPhysicalDevice, tCandidates[i], &tProps);
+
+        // check if format supports depth/stencil attachment
+        if (tProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            return tCandidates[i];
+        }
+    }
+
+    printf("Failed to find supported depth format!\n"); // TODO: need proper error handling here
+    exit(1);
+}
+
+
