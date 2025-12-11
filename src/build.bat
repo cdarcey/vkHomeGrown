@@ -92,6 +92,32 @@
     @goto ShaderError
 )
 
+@if exist "%SHADER_DIR%/cube_vert.vert" (
+    @echo Compiling vertex shader...
+    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/cube_vert.vert" -o "%OUTPUT_DIR%/shaders/cube_vert.spv"
+    @if %ERRORLEVEL% NEQ 0 (
+        @echo [91mFailed to compile vertex shader[0m
+        @goto ShaderError
+    )
+) else (
+    @echo [91mError: cube_vert.vert not found at %SHADER_DIR%/cube_vert.vert[0m
+    @dir "%SHADER_DIR%"
+    @goto ShaderError
+)
+
+@if exist "%SHADER_DIR%/cube_frag.frag" (
+    @echo Compiling fragment shader...
+    "%VULKAN_SDK%\Bin\glslc.exe" "%SHADER_DIR%/cube_frag.frag" -o "%OUTPUT_DIR%/shaders/cube_frag.spv"
+    @if %ERRORLEVEL% NEQ 0 (
+        @echo [91mFailed to compile fragment shader[0m
+        @goto ShaderError
+    )
+) else (
+    @echo [91mError: cube_frag.frag not found at %SHADER_DIR%/cube_frag.frag[0m
+    @dir "%SHADER_DIR%"
+    @goto ShaderError
+)
+
 @echo [92mShader compilation complete![0m
 @goto AfterShaders
 

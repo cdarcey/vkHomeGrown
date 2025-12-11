@@ -41,9 +41,9 @@
 
 typedef struct _hgVertex
 {
-    float x, y;       // position
+    float x, y, z;    // position
     float r, g, b, a; // color
-    float u, v;       // texture coords
+    // float u, v;       // texture coords TODO: 
 } hgVertex;
 
 typedef struct _hgTexture
@@ -54,6 +54,15 @@ typedef struct _hgTexture
     int            iWidth;
     int            iHeight;
 } hgTexture;
+
+// Add to header
+typedef struct _hgUniformBuffer
+{
+    VkBuffer       tBuffer;
+    VkDeviceMemory tMemory;
+    void*          pMapped;  // keep mapped for updates
+    size_t         szSize;
+} hgUniformBuffer;
 
 typedef struct _hgVertexBuffer
 {
@@ -226,6 +235,11 @@ hgPipeline hg_create_graphics_pipeline(hgAppData* ptState, hgPipelineConfig* con
 // descriptors 
 VkDescriptorPool hg_create_descriptor_pool(hgAppData* ptState, uint32_t uMaxSets, VkDescriptorPoolSize* atPoolSizes, uint32_t uPoolSizeCount);
 void             hg_update_texture_descriptor(hgAppData* ptState, VkDescriptorSet tDescriptorSet, uint32_t uBinding, hgTexture* tTexture, VkSampler tSampler);
+
+// uniform buffers
+hgUniformBuffer hg_create_uniform_buffer(hgAppData* ptState, size_t size);
+void            hg_update_uniform_buffer(hgAppData* ptState, hgUniformBuffer* buffer, void* data, size_t size);
+void            hg_destroy_uniform_buffer(hgAppData* ptState, hgUniformBuffer* buffer);
 
 // =============================================================================
 // FRAME RENDERING

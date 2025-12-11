@@ -747,6 +747,51 @@ hg_update_texture_descriptor(hgAppData* ptState, VkDescriptorSet tDescriptorSet,
     vkUpdateDescriptorSets(ptState->tContextComponents.tDevice, 1, &tDescriptorWrite, 0, NULL);
 }
 
+hgUniformBuffer 
+hg_create_uniform_buffer(hgAppData* ptState, size_t szSize)
+{
+    hgUniformBuffer tNewBuffer = {0};
+    tNewBuffer.szSize = szSize;
+
+    // create buffer
+    hg_create_buffer(&ptState->tContextComponents, (VkDeviceSize)szSize,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,&tNewBuffer.tBuffer, &tNewBuffer.tMemory);
+
+    // keep the buffer mapped permanently for easy updates
+    vkMapMemory(ptState->tContextComponents.tDevice, tNewBuffer.tMemory, 0, szSize, 0, &tNewBuffer.pMapped);
+
+    return tNewBuffer;
+}
+
+void 
+hg_update_uniform_buffer(hgAppData* ptState, hgUniformBuffer* tBuffer, void* pData, size_t szSize)
+{
+    // since we keep it mapped, just memcpy -> note: no need to unmap/remap - HOST_COHERENT flag means writes are automatically visible to GPU
+    memcpy(tBuffer->pMapped, pData, szSize);
+}
+
+void 
+hg_destroy_uniform_buffer(hgAppData* ptState, hgUniformBuffer* tBuffer)
+{
+    // unmap before destroying
+    if (tBuffer->pMapped) 
+    {
+        vkUnmapMemory(ptState->tContextComponents.tDevice, tBuffer->tMemory);
+        tBuffer->pMapped = NULL;
+    }
+    if (tBuffer->tBuffer != VK_NULL_HANDLE) 
+    {
+        vkDestroyBuffer(ptState->tContextComponents.tDevice, tBuffer->tBuffer, NULL);
+        tBuffer->tBuffer = VK_NULL_HANDLE;
+    }
+    if (tBuffer->tMemory != VK_NULL_HANDLE) 
+    {
+        vkFreeMemory(ptState->tContextComponents.tDevice, tBuffer->tMemory, NULL);
+        tBuffer->tMemory = VK_NULL_HANDLE;
+    }
+    tBuffer->szSize = 0;
+}
+
 // =============================================================================
 // FRAME RENDERING
 // =============================================================================
