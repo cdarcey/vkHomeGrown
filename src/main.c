@@ -1,14 +1,18 @@
 
 
+#define _USE_MATH_DEFINES
+
+
 #include "vkHomeGrown.h"
+#include <math.h>
+#include <string.h> // memcpy
 
 
 int main(void) 
 {
 
     // example settings
-    bool bQuad     = true;  // false renders a triangle
-    bool bTextured = false; // false renders colors in vert data 
+    bool bTextured = true; // false renders colors in vert data 
 
     // init GLFW
     if (!glfwInit()) 
@@ -34,6 +38,7 @@ int main(void)
     tState.pWindow       = window;  // store GLFW window pointer
     tState.width         = 800;
     tState.height        = 600;
+    tState.bDepthEnabled = false;
 
     // get actual window size (framebuffer size for Vulkan)
     int fbWidth, fbHeight;
@@ -51,23 +56,22 @@ int main(void)
     // test vertex & index data for quad
     float fTestVerticesQuad[] = {
         // x, y,      r, g, b, a,             u, v
-        -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,   // top left     -> red
-        -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,   // bottom left  -> yellow
-         0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // bottom right -> blue
-         0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f    // top right    -> green
+        -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // top left     -> red
+        -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, // bottom left  -> yellow
+         0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, // bottom right -> blue
+         0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f  // top right    -> green
     };
     uint16_t uTestIndices[6] = {
         0, 1, 2,  // first triangle  (TL, BL, BR)
         2, 3, 0   // second triangle (BR, TR, TL)
     };
 
-    // test vertex data for triangle 
-    float fTestVerticesTriangle[] = {
-        // x, y,      r, g, b, a,              u, v
-         0.0f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.0f,   // top          -> red
-        -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,   // bottom left  -> green
-         0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // bottom right -> blue
-    };
+    // storing as a constant for rotation speed
+    float fAngularVelocity = (2 * M_PI) / 3; // 3 seconds to get 1 rotation every 3 seconds
+    // declare rotation variable
+    float fAngle; // radians
+    float fResultX, fResultY; // transfom variables
+    float fRadius = 0.2f; // radius of circle
 
     hgRenderPassConfig tConfig = {
         .tLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -81,9 +85,9 @@ int main(void)
     hg_create_framebuffers(&tState);
     hg_create_command_pool(&tState);
 
-    hgVertexBuffer fTestVertBufferQuad     = hg_create_vertex_buffer(&tState, fTestVerticesQuad, sizeof(fTestVerticesQuad), sizeof(float) * 8);
-    hgVertexBuffer fTestVertBufferTriangle = hg_create_vertex_buffer(&tState, fTestVerticesTriangle, sizeof(fTestVerticesTriangle), sizeof(float) * 8);
-    hgIndexBuffer  tTestIndBuffer        = hg_create_index_buffer(&tState, uTestIndices, 6);
+    // create dynamic buffer so data is cpu accessible for example
+    hgVertexBuffer fTestVertBufferQuad = hg_create_dynamic_vertex_buffer(&tState, fTestVerticesQuad, sizeof(fTestVerticesQuad), sizeof(float) * 8);
+    hgIndexBuffer  tTestIndBuffer      = hg_create_index_buffer(&tState, uTestIndices, 6);
 
 
     // descriptors 
@@ -121,7 +125,7 @@ int main(void)
     int iTextureHeight = 0;
     int iTextureWidth  = 0;
     unsigned char* pcTextureData = hg_load_texture_data("../textures/cobble.png", &iTextureWidth, &iTextureHeight);
-    hgTexture tTestTexture = hg_create_texture(&tState, pcTextureData, iTextureWidth, iTextureHeight);
+    hgTexture      tTestTexture  = hg_create_texture(&tState, pcTextureData, iTextureWidth, iTextureHeight);
 
     // sampler
     VkSampler tTextureSampler;
@@ -176,8 +180,6 @@ int main(void)
     // command buffer creation and recording
     hg_allocate_frame_cmd_buffers(&tState);
 
-
-
     // main loop
     while (!glfwWindowShouldClose(window)) 
     {
@@ -197,6 +199,25 @@ int main(void)
             continue; // skip this frame
         }
 
+        // get time for rotation
+        float fTimeElapsed = glfwGetTime();
+        // calculate angle
+        fAngle = fTimeElapsed * fAngularVelocity;
+        // copy vertex data for copying to buffer to maintian orignal vertex data
+        float fVertexDataCopy[sizeof(fTestVerticesQuad) / sizeof(float)] = {0};
+        memcpy(fVertexDataCopy, fTestVerticesQuad, sizeof(fTestVerticesQuad));
+        // loop through to apply new angles 
+        for(uint32_t i = 0; i < fTestVertBufferQuad.uVertexCount * 8; i+= 8) // 8 is vertex stride to skip color, uv 
+        {
+            fResultX = fRadius * cosf(fAngle);
+            fResultY = fRadius * sinf(fAngle);
+
+            fVertexDataCopy[i]     =  fTestVerticesQuad[i]     + fResultX;
+            fVertexDataCopy[i + 1] =  fTestVerticesQuad[i + 1] + fResultY;
+        }
+        // memcpy new vertex data into vkbuffer object here
+        memcpy(fTestVertBufferQuad.pDataMapped, fVertexDataCopy, sizeof(fVertexDataCopy));
+
         // begin frame
         uint32_t uImageIndex = hg_begin_frame(&tState);
         hg_begin_render_pass(&tState, uImageIndex);
@@ -204,26 +225,17 @@ int main(void)
         // scene/ frame building -> testing stuff in here for now
         vkCmdBindPipeline(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipeline);
 
-    
         if(bTextured) // apply texture 
         {
             vkCmdBindDescriptorSets(tState.tCommandComponents.tCommandBuffers[uImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, tTestPipeline.tPipelineLayout, 0, 1, &tDescriptorSet, 0, NULL);
         }
 
-        if(bQuad) // render quad
-        {
-            // bind vertex buffer
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[uImageIndex], 0, 1, &fTestVertBufferQuad.tBuffer, offsets);
-            vkCmdBindIndexBuffer(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.tBuffer, 0, VK_INDEX_TYPE_UINT16);
-            vkCmdDrawIndexed(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.uIndexCount, 1, 0, 0, 0);
-        }
-        else // render triangle
-        {
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[uImageIndex], 0, 1, &fTestVertBufferTriangle.tBuffer, offsets);
-            vkCmdDraw(tState.tCommandComponents.tCommandBuffers[uImageIndex], 3, 1, 0, 0);
-        }
+        // bind vertex buffer
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(tState.tCommandComponents.tCommandBuffers[uImageIndex], 0, 1, &fTestVertBufferQuad.tBuffer, offsets);
+        vkCmdBindIndexBuffer(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.tBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(tState.tCommandComponents.tCommandBuffers[uImageIndex], tTestIndBuffer.uIndexCount, 1, 0, 0, 0);
+
         // end frame 
         hg_end_render_pass(&tState);
         hg_end_frame(&tState, tState.tCommandComponents.uCurrentImageIndex);
@@ -236,7 +248,6 @@ int main(void)
     // destroy low level resources first 
     hg_destroy_texture(&tState, &tTestTexture); // destroys image, image view, memory
     hg_destroy_vertex_buffer(&tState, &fTestVertBufferQuad);
-    hg_destroy_vertex_buffer(&tState, &fTestVertBufferTriangle);
     hg_destroy_index_buffer(&tState, &tTestIndBuffer);
 
     // destroy pipeline 

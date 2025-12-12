@@ -70,6 +70,7 @@ typedef struct _hgVertexBuffer
     VkDeviceMemory tMemory;
     size_t         szSize;
     uint32_t       uVertexCount;
+    void*          pDataMapped; // TODO: do i need this stored? 
 } hgVertexBuffer;
 
 typedef struct _hgIndexBuffer
@@ -233,7 +234,8 @@ void hg_create_depth_resources(hgAppData* ptState);
 // =============================================================================
 
 // buffers
-hgVertexBuffer hg_create_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride);
+hgVertexBuffer hg_create_static_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride);
+hgVertexBuffer hg_create_dynamic_vertex_buffer(hgAppData* ptState, void* data, size_t size, size_t stride);
 hgIndexBuffer  hg_create_index_buffer(hgAppData* ptState, uint16_t* indices, uint32_t count);
 
 // textures

@@ -528,7 +528,7 @@ hg_create_depth_resources(hgAppData* ptState)
 // buffers
 // -------------------------------
 hgVertexBuffer 
-hg_create_vertex_buffer(hgAppData* ptAppData, void* data, size_t size, size_t stride)
+hg_create_static_vertex_buffer(hgAppData* ptAppData, void* data, size_t size, size_t stride)
 {
     hgVertexBuffer tNewBuffer = {0};
 
@@ -558,6 +558,26 @@ hg_create_vertex_buffer(hgAppData* ptAppData, void* data, size_t size, size_t st
     // cleanup staging
     vkDestroyBuffer(ptAppData->tContextComponents.tDevice, tStagingBuffer, NULL);
     vkFreeMemory(ptAppData->tContextComponents.tDevice, tStagingMemory, NULL);
+
+    return tNewBuffer;
+}
+
+hgVertexBuffer 
+hg_create_dynamic_vertex_buffer(hgAppData* ptState, void* pData, size_t szSize, size_t szStride)
+{
+    hgVertexBuffer tNewBuffer = {0};
+
+    tNewBuffer.szSize = szSize;
+    tNewBuffer.uVertexCount = szSize / szStride;
+
+    // create host-visible vertex buffer 
+    hg_create_buffer(&ptState->tContextComponents, (VkDeviceSize)szSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &tNewBuffer.tBuffer, &tNewBuffer.tMemory);
+
+    // map memory once and keep it mapped
+    vkMapMemory(ptState->tContextComponents.tDevice, tNewBuffer.tMemory, 0, szSize, 0, &tNewBuffer.pDataMapped);
+    // copy initial data
+    memcpy(tNewBuffer.pDataMapped, pData, szSize);
 
     return tNewBuffer;
 }
