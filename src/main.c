@@ -7,12 +7,14 @@
 #include <math.h>
 #include <string.h> // memcpy
 
+void processInput(GLFWwindow *window, float* fAngularVelocity, float* fAngVelConst);
+
 
 int main(void) 
 {
 
     // example settings
-    bool bTextured = true; // false renders colors in vert data 
+    bool bTextured = false; // false renders colors in vert data 
 
     // init GLFW
     if (!glfwInit()) 
@@ -56,22 +58,29 @@ int main(void)
     // test vertex & index data for quad
     float fTestVerticesQuad[] = {
         // x, y,      r, g, b, a,             u, v
-        -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // top left     -> red
-        -0.5f,  0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, // bottom left  -> yellow
-         0.5f,  0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, // bottom right -> blue
-         0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f  // top right    -> green
+        -0.25f, -0.25f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // top left     -> red
+        -0.25f,  0.25f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, // bottom left  -> yellow
+         0.25f,  0.25f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, // bottom right -> blue
+         0.25f, -0.25f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f  // top right    -> green
     };
     uint16_t uTestIndices[6] = {
         0, 1, 2,  // first triangle  (TL, BL, BR)
         2, 3, 0   // second triangle (BR, TR, TL)
     };
 
+    // orbit variables
     // storing as a constant for rotation speed
-    float fAngularVelocity = (2 * M_PI) / 3; // 3 seconds to get 1 rotation every 3 seconds
-    // declare rotation variable
-    float fAngle; // radians
-    float fResultX, fResultY; // transfom variables
-    float fRadius = 0.2f; // radius of circle
+    float fOrbitAngularVelocity = (2 * M_PI) / 5;  // 5 seconds per orbit
+    float fSpinAngularVelocity = (2 * M_PI) / 3; // 3 seconds per spin
+
+    float fAngVelConst = fOrbitAngularVelocity; // for resetting to orginal speed with input 
+    // declare rotation variables
+    float fOrbitAngle = 0.0f; // radians
+    float fSpinAngle = 0; 
+    float fResultX, fResultY = 0; // transfom variables
+    float fRadius = 0.5f; // radius of circle
+    float fLastFrameTime = 0; // for caluclating delta time 
+
 
     hgRenderPassConfig tConfig = {
         .tLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -184,6 +193,7 @@ int main(void)
     while (!glfwWindowShouldClose(window)) 
     {
         glfwPollEvents();
+        processInput(window, &fOrbitAngularVelocity, & fAngVelConst);
 
         int newWidth, newHeight;
         glfwGetFramebufferSize(window, &newWidth, &newHeight);
@@ -199,21 +209,35 @@ int main(void)
             continue; // skip this frame
         }
 
-        // get time for rotation
-        float fTimeElapsed = glfwGetTime();
-        // calculate angle
-        fAngle = fTimeElapsed * fAngularVelocity;
+        // get time for rotation and set delta for input math
+        float fCurrentTime = glfwGetTime();
+        float fDeltaTime = fCurrentTime - fLastFrameTime; 
+        fLastFrameTime = fCurrentTime;
+
+        // get new angle after input affect
+        fOrbitAngle -= fOrbitAngularVelocity * fDeltaTime;
+        fSpinAngle += fSpinAngularVelocity * fDeltaTime; // change sign ( + or -) to change direction
         // copy vertex data for copying to buffer to maintian orignal vertex data
         float fVertexDataCopy[sizeof(fTestVerticesQuad) / sizeof(float)] = {0};
         memcpy(fVertexDataCopy, fTestVerticesQuad, sizeof(fTestVerticesQuad));
         // loop through to apply new angles 
         for(uint32_t i = 0; i < fTestVertBufferQuad.uVertexCount * 8; i+= 8) // 8 is vertex stride to skip color, uv 
         {
-            fResultX = fRadius * cosf(fAngle);
-            fResultY = fRadius * sinf(fAngle);
+            // get original vertex position
+            float fOrigX = fTestVerticesQuad[i];
+            float fOrigY = fTestVerticesQuad[i + 1];
 
-            fVertexDataCopy[i]     =  fTestVerticesQuad[i]     + fResultX;
-            fVertexDataCopy[i + 1] =  fTestVerticesQuad[i + 1] + fResultY;
+            // spin the vertex around origin
+            float fRotatedX = fOrigX * cosf(fSpinAngle) - fOrigY * sinf(fSpinAngle);
+            float fRotatedY = fOrigX * sinf(fSpinAngle) + fOrigY * cosf(fSpinAngle);
+
+            // calculate orbit offset
+            float fOrbitOffsetX = fRadius * cosf(fOrbitAngle);
+            float fOrbitOffsetY = fRadius * sinf(fOrbitAngle);
+
+            // combine: rotated position + orbit offset
+            fVertexDataCopy[i]     = fRotatedX + fOrbitOffsetX;
+            fVertexDataCopy[i + 1] = fRotatedY + fOrbitOffsetY;
         }
         // memcpy new vertex data into vkbuffer object here
         memcpy(fTestVertBufferQuad.pDataMapped, fVertexDataCopy, sizeof(fVertexDataCopy));
@@ -264,4 +288,21 @@ int main(void)
     glfwTerminate();
 
     return 0;
+}
+
+void 
+processInput(GLFWwindow *window, float* fAngularVelocity, float* fAngVelConst)
+{
+    if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+    {
+        if(*fAngularVelocity >=.00001)*fAngularVelocity -= 0.05f;
+    }
+    if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+    {
+        *fAngularVelocity += 0.05f;
+    }
+    if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        *fAngularVelocity = *fAngVelConst;
+    }
 }
